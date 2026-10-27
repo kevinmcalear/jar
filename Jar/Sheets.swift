@@ -1,3 +1,4 @@
+import CloudKit
 import SwiftUI
 import UIKit
 
@@ -244,7 +245,6 @@ struct SettingsSheet: View {
     @State private var goalText = ""
     @State private var newCategory = ""
     @State private var zoneQuery = ""
-    @State private var share = false
 
     var body: some View {
         NavigationStack {
@@ -308,11 +308,14 @@ struct SettingsSheet: View {
                     }
                     .padding(12)
                     .background(Flare.surface, in: RoundedRectangle(cornerRadius: 12))
-                    Button("Invite the other phone") { share = true }
-                        .font(.headline)
-                        .foregroundStyle(Flare.ground)
-                        .frame(maxWidth: .infinity, minHeight: 52)
-                        .background(Flare.flare, in: RoundedRectangle(cornerRadius: 16))
+                    ShareLink(item: HouseholdInvite(), preview: SharePreview("Jar")) {
+                        Text("Invite the other phone")
+                            .font(.headline)
+                            .foregroundStyle(Flare.ground)
+                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .background(Flare.flare, in: RoundedRectangle(cornerRadius: 16))
+                    }
+                    .buttonStyle(.plain)
                     if let error = model.shareError {
                         Text(error).font(.caption).foregroundStyle(Flare.flare)
                     }
@@ -327,7 +330,6 @@ struct SettingsSheet: View {
                 capText = dollarText(model.snapshot.settings?.usualCap ?? 5000)
                 goalText = model.snapshot.settings?.savingsGoal.map(dollarText) ?? ""
             }
-            .sheet(isPresented: $share) { ShareSheet() }
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
@@ -523,31 +525,17 @@ private func jpegData(_ image: UIImage) -> Data? {
     return rendered.jpegData(compressionQuality: 0.7)
 }
 
-struct ShareSheet: UIViewControllerRepresentable {
-    @Environment(AppModel.self) private var model
-
-    func makeUIViewController(context: Context) -> UIViewController {
-        context.coordinator.model = model
-        let controller = UICloudSharingController { _, completion in
-            Task { @MainActor in
-                do {
-                    guard let sync = context.coordinator.model?.sync else { return }
-                    let share = try await sync.makeShare()
-                    completion(share, sync.container, nil)
-                } catch {
-                    context.coordinator.model?.shareError = error.localizedDescription
-                    completion(nil, nil, error)
-                }
+private struct HouseholdInvite: Transferable {
+    static var transferRepresentation: some TransferRepresentation {
+        let options = CKAllowedSharingOptions(
+            allowedParticipantPermissionOptions: .readWrite,
+            allowedParticipantAccessOptions: .specifiedRecipientsOnly
+        )
+        return CKShareTransferRepresentation { (_: HouseholdInvite) in
+            .prepareShare(container: CKContainer(identifier: "iCloud.com.kevinmcalear.dailyjar"), allowedSharingOptions: options) {
+                guard let model = await JarDelegate.held else { throw CocoaError(.userCancelled) }
+                return try await model.sync.makeShare()
             }
         }
-        controller.availablePermissions = [.allowReadWrite]
-        return controller
-    }
-
-    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    final class Coordinator {
-        var model: AppModel?
     }
 }
