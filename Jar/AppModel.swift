@@ -404,8 +404,10 @@ final class AppModel {
             reload()
             sync.enqueueSave(open)
         }
-        if let latest = snapshot.days.filter(\.settled).map(\.date).max() {
-            for day in daysFrom(addDays(latest, 1, timeZone: timeZone), until: open, timeZone: timeZone) {
+        let known = snapshot.days.map(\.date) + snapshot.entries.filter { $0.kind == "jar" }.map(\.day)
+        let latest = snapshot.days.filter(\.settled).map(\.date).max()
+        if let start = firstDayToBank(open: open, latestSettled: latest, knownDays: known, timeZone: timeZone) {
+            for day in daysFrom(start, until: open, timeZone: timeZone) {
                 if !snapshot.days.contains(where: { $0.date == day }) {
                     try? store.insertDay(DayRow(date: day, cap: snapshot.settings?.usualCap ?? 5000, settled: false))
                     sync.enqueueSave(day)

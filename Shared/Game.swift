@@ -229,6 +229,15 @@ func daysFrom(_ start: String, until end: String, timeZone: TimeZone) -> [String
     return result
 }
 
+/// Closed days bank into the jar. The chain resumes after the last settled day, or at the earliest closed day when none have settled yet.
+func firstDayToBank(open: String, latestSettled: String?, knownDays: [String], timeZone: TimeZone) -> String? {
+    if let latestSettled {
+        let next = addDays(latestSettled, 1, timeZone: timeZone)
+        return next < open ? next : nil
+    }
+    return knownDays.filter { $0 < open }.min()
+}
+
 func daysInYear(_ year: Int, timeZone: TimeZone) -> Int {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = timeZone

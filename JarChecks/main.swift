@@ -105,6 +105,11 @@ let forgotten = shovePlan(beforeJar: 0, beforeDebt: 0, afterJar: 5000, afterDebt
 check(forgotten.tappable && forgotten.text.contains("Nothing was logged"), "forgotten day")
 let exact = shovePlan(beforeJar: 14000, beforeDebt: 0, afterJar: 14000, afterDebt: 0, days: [(5000, 5000)])
 check(!exact.plays && exact.text.contains("whole allowance"), "exact cap")
+check(replay([(cap: 5000, spent: 4500)]).jar == 500, "five dollars left banks")
+check(firstDayToBank(open: "2026-10-27", latestSettled: nil, knownDays: ["2026-10-26", "2026-10-27"], timeZone: tz) == "2026-10-26", "an unsettled yesterday still banks")
+check(firstDayToBank(open: "2026-10-27", latestSettled: "2026-10-24", knownDays: [], timeZone: tz) == "2026-10-25", "resume after the last closed day")
+check(firstDayToBank(open: "2026-10-27", latestSettled: nil, knownDays: ["2026-10-27"], timeZone: tz) == nil, "today stays open")
+check(firstDayToBank(open: "2026-10-27", latestSettled: "2026-10-26", knownDays: ["2026-10-26"], timeZone: tz) == nil, "yesterday already banked")
 
 let salt = Data((0..<16).map { UInt8($0) })
 let key = deriveHouseholdKey(passphrase: "test-passphrase", salt: salt)
