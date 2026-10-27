@@ -61,6 +61,11 @@ func billRowWidth(_ bills: [BillFace]) -> CGFloat {
     return widths.reduce(0, +) + CGFloat(max(0, bills.count - 1)) * 8
 }
 
+/// Face ID cannot open a household whose passphrase changed. Prompting again just retriggers itself when the sheet dismisses.
+func shouldPromptToUnlock(passphraseReset: Bool, hasKey: Bool) -> Bool {
+    !passphraseReset && !hasKey
+}
+
 func isCloudKitShareURL(_ url: URL) -> Bool {
     guard url.scheme?.lowercased() == "https", let host = url.host?.lowercased() else { return false }
     let shareHost = host == "www.icloud.com" || host == "icloud.com" || host == "share.icloud.com"

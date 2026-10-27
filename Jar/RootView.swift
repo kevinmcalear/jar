@@ -28,9 +28,12 @@ struct RootView: View {
             guard url.scheme == PileBoard.add.scheme, url.host == PileBoard.add.host else { return }
             model.openAdd()
         }
-        .onChange(of: scenePhase) { _, phase in
+        .onChange(of: scenePhase) { previous, phase in
             if phase == .background { model.lock() }
-            if phase == .active { Task { await model.wake() } }
+            // The Face ID sheet goes inactive, then active. Waking on that active starts another prompt.
+            if previous == .background, phase == .active {
+                Task { await model.wake() }
+            }
         }
     }
 
@@ -303,8 +306,10 @@ struct UnlockView: View {
             .foregroundStyle(Flare.ground)
             .frame(maxWidth: .infinity, minHeight: 56)
             .background(Flare.flare, in: RoundedRectangle(cornerRadius: 16))
-            Button("Try Face ID") { Task { await model.wake() } }
-                .foregroundStyle(Flare.paper)
+            if !UserDefaults.standard.bool(forKey: "jar.passphraseReset") {
+                Button("Try Face ID") { Task { await model.wake() } }
+                    .foregroundStyle(Flare.paper)
+            }
         }
         .padding(24)
     }

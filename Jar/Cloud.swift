@@ -470,7 +470,11 @@ extension AppModel {
     func acceptShare(_ metadata: CKShare.Metadata) async {
         guard !acceptingShare else { return }
         acceptingShare = true
-        defer { acceptingShare = false }
+        suspendLock = true
+        defer {
+            acceptingShare = false
+            suspendLock = false
+        }
         boot()
         let owner = metadata.share.recordID.zoneID.ownerName
         guard !owner.isEmpty else {
@@ -503,6 +507,7 @@ extension AppModel {
         } else if snapshot.settings?.verifier != nil {
             key = nil
             unlocked = false
+            deleteHouseholdKey()
             UserDefaults.standard.set(true, forKey: "jar.passphraseReset")
         }
         await flushNotices()

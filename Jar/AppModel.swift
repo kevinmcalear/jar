@@ -165,6 +165,11 @@ final class AppModel {
     func wake() async {
         guard booted, snapshot.settings != nil else { return }
         if key == nil {
+            let reset = UserDefaults.standard.bool(forKey: "jar.passphraseReset")
+            guard shouldPromptToUnlock(passphraseReset: reset, hasKey: false) else {
+                unlocked = false
+                return
+            }
             guard !waking else { return }
             waking = true
             defer { waking = false }
