@@ -176,7 +176,11 @@ struct MonthView: View {
                 let person = model.snapshot.people.first { $0.id == entry.personID }
                 let category = model.snapshot.categories.first { $0.id == entry.categoryID }
                 HStack(spacing: 8) {
-                    PersonSticker(sticker: person?.sticker ?? "kevin", name: person?.displayName ?? "", size: 32)
+                    if let person {
+                        PersonSticker(sticker: person.sticker, name: person.displayName, size: 32)
+                    } else {
+                        CustomSeal(name: "").frame(width: 32, height: 32)
+                    }
                     CategoryMark(builtIn: category?.builtIn, name: category?.name ?? "", size: 22)
                     VStack(alignment: .leading) {
                         Text(person?.displayName ?? "").foregroundStyle(Flare.paper).lineLimit(1)

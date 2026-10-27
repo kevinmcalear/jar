@@ -114,8 +114,11 @@ final class AppModel {
             sync.directory = store.directory
             loadWaiting()
             if snapshot.settings != nil {
+                applyRelink()
                 collapseHouseholdCopies()
+                healLostFaces()
                 alignCategories()
+                publishRoster()
             }
         } catch {
             loadError = error.localizedDescription
@@ -142,10 +145,15 @@ final class AppModel {
         var changed = false
         for key in Set(snapshot.categories.compactMap(\.builtIn)) {
             let rows = snapshot.categories.filter { $0.builtIn == key }
-            guard rows.count > 1, let keep = keptDuplicate(rows.map { row in
+            let ranked = rows.map { row in
                 DuplicateRow(id: row.id, updatedAt: row.updatedAt, uses: snapshot.entries.filter { $0.categoryID == row.id }.count)
-            }) else { continue }
+            }
+            guard rows.count > 1, let keep = keptDuplicate(ranked) else { continue }
+            let keepUses = ranked.first { $0.id == keep }?.uses ?? 0
             for extra in rows where extra.id != keep {
+                let extraUses = ranked.first { $0.id == extra.id }?.uses ?? 0
+                // Both empty means the spends have not arrived. Deleting now orphans the other phone's rows.
+                if keepUses == 0, extraUses == 0 { continue }
                 let moved = snapshot.entries.filter { $0.categoryID == extra.id }.map(\.id)
                 do {
                     try store.retargetCategory(from: extra.id, to: keep, updatedAt: now)
@@ -153,16 +161,20 @@ final class AppModel {
                 } catch { continue }
                 moved.forEach { sync.enqueueSave($0) }
                 sync.enqueueSave(keep)
-                sync.enqueueDelete(extra.id)
+                if extraUses == 0, keepUses > 0 { sync.enqueueDelete(extra.id) }
                 changed = true
             }
         }
         for sticker in ["kevin", "bridget"] {
             let rows = snapshot.people.filter { $0.sticker == sticker }
-            guard rows.count > 1, let keep = keptDuplicate(rows.map { row in
+            let ranked = rows.map { row in
                 DuplicateRow(id: row.id, updatedAt: "", uses: snapshot.entries.filter { $0.personID == row.id }.count)
-            }) else { continue }
+            }
+            guard rows.count > 1, let keep = keptDuplicate(ranked) else { continue }
+            let keepUses = ranked.first { $0.id == keep }?.uses ?? 0
             for extra in rows where extra.id != keep {
+                let extraUses = ranked.first { $0.id == extra.id }?.uses ?? 0
+                if keepUses == 0, extraUses == 0 { continue }
                 let moved = snapshot.entries.filter { $0.personID == extra.id }.map(\.id)
                 do {
                     try store.retargetPerson(from: extra.id, to: keep, updatedAt: now)
@@ -179,11 +191,59 @@ final class AppModel {
                 }
                 moved.forEach { sync.enqueueSave($0) }
                 sync.enqueueSave(keep)
-                sync.enqueueDelete(extra.id)
+                if extraUses == 0, keepUses > 0 { sync.enqueueDelete(extra.id) }
                 changed = true
             }
         }
         if changed { reload() }
+    }
+
+    /// A dropped relink.json maps a deleted duplicate id back to the copy that is still here.
+    func applyRelink() {
+        guard let store, let directory = sync.directory else { return }
+        let url = directory.appendingPathComponent("relink.json")
+        guard let data = try? Data(contentsOf: url),
+              let map = try? JSONDecoder().decode([String: String].self, from: data) else { return }
+        let now = stamp()
+        var moved: [String] = []
+        for (from, to) in map {
+            let hits = snapshot.entries.filter { $0.personID == from || $0.categoryID == from }.map(\.id)
+            guard !hits.isEmpty else { continue }
+            if snapshot.people.contains(where: { $0.id == to }) { try? store.retargetPerson(from: from, to: to, updatedAt: now) }
+            if snapshot.categories.contains(where: { $0.id == to }) { try? store.retargetCategory(from: from, to: to, updatedAt: now) }
+            moved.append(contentsOf: hits)
+        }
+        try? FileManager.default.removeItem(at: url)
+        guard !moved.isEmpty else { return }
+        reload()
+        Set(moved).forEach { sync.enqueueSave($0) }
+    }
+
+    func healLostFaces() {
+        guard let store else { return }
+        let referenced = Set(snapshot.entries.compactMap(\.personID))
+        guard let keep = faceForOrphanSpends(people: snapshot.people.map { (id: $0.id, referenced: referenced.contains($0.id)) }) else { return }
+        let orphans = referenced.subtracting(snapshot.people.map(\.id))
+        guard !orphans.isEmpty else { return }
+        let now = stamp()
+        var moved: [String] = []
+        for from in orphans {
+            let hits = snapshot.entries.filter { $0.personID == from }.map(\.id)
+            try? store.retargetPerson(from: from, to: keep, updatedAt: now)
+            moved.append(contentsOf: hits)
+        }
+        guard !moved.isEmpty else { return }
+        reload()
+        moved.forEach { sync.enqueueSave($0) }
+        sync.enqueueSave(keep)
+    }
+
+    func publishRoster() {
+        let defaults = UserDefaults.standard
+        guard snapshot.settings != nil, !defaults.bool(forKey: "jar.rosterPushed") else { return }
+        snapshot.people.forEach { sync.enqueueSave($0.id) }
+        snapshot.categories.forEach { sync.enqueueSave($0.id) }
+        defaults.set(true, forKey: "jar.rosterPushed")
     }
 
     private func alignCategories() {

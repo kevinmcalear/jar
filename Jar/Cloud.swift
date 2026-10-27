@@ -86,6 +86,8 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
             resetSync()
         }
         model?.collapseHouseholdCopies()
+        model?.healLostFaces()
+        model?.publishRoster()
         model?.republishIfNeeded()
     }
 
@@ -449,22 +451,41 @@ extension AppModel {
             try? store?.deleteMoney("bills", name)
             reload()
         } else if type == "Category" {
-            if let builtIn = snapshot.categories.first(where: { $0.id == name })?.builtIn,
-               let keep = snapshot.categories.first(where: { $0.id != name && $0.builtIn == builtIn })?.id {
-                try? store?.retargetCategory(from: name, to: keep, updatedAt: stamp())
+            guard let row = snapshot.categories.first(where: { $0.id == name }) else { return }
+            let sibling = snapshot.categories.first { $0.id != name && $0.builtIn != nil && $0.builtIn == row.builtIn }
+            let referenced = snapshot.entries.contains { $0.categoryID == name }
+            if referenced, sibling == nil {
+                sync.enqueueSave(name)
+                return
+            }
+            let moved = snapshot.entries.filter { $0.categoryID == name }.map(\.id)
+            if let sibling, referenced {
+                try? store?.retargetCategory(from: name, to: sibling.id, updatedAt: stamp())
             }
             try? store?.deleteCategory(name)
             reload()
+            if referenced { moved.forEach { sync.enqueueSave($0) } }
         } else if type == "Person" {
-            let sticker = snapshot.people.first { $0.id == name }?.sticker
-            if let sticker, let keep = snapshot.people.first(where: { $0.id != name && $0.sticker == sticker })?.id {
-                try? store?.retargetPerson(from: name, to: keep, updatedAt: stamp())
-                if var settings = snapshot.settings {
-                    var settingsChanged = false
-                    if settings.holderID == name { settings.holderID = keep; settingsChanged = true }
-                    if settings.usualCapSetBy == name { settings.usualCapSetBy = keep; settingsChanged = true }
-                    if settingsChanged { try? store?.insertSettings(settings) }
+            guard let row = snapshot.people.first(where: { $0.id == name }) else { return }
+            let sibling = snapshot.people.first { $0.id != name && $0.sticker == row.sticker }
+            let referenced = snapshot.entries.contains { $0.personID == name }
+            if referenced || sibling == nil {
+                if let sibling, referenced {
+                    try? store?.retargetPerson(from: name, to: sibling.id, updatedAt: stamp())
+                    let moved = snapshot.entries.filter { $0.personID == name }.map(\.id)
+                    if var settings = snapshot.settings {
+                        var settingsChanged = false
+                        if settings.holderID == name { settings.holderID = sibling.id; settingsChanged = true }
+                        if settings.usualCapSetBy == name { settings.usualCapSetBy = sibling.id; settingsChanged = true }
+                        if settingsChanged { try? store?.insertSettings(settings) }
+                    }
+                    try? store?.deletePerson(name)
+                    reload()
+                    moved.forEach { sync.enqueueSave($0) }
+                    return
                 }
+                sync.enqueueSave(name)
+                return
             }
             try? store?.deletePerson(name)
             reload()

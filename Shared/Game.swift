@@ -77,6 +77,12 @@ struct DuplicateRow: Equatable {
 }
 
 /// One row per built-in. The copy spends already point at wins. A tie keeps the older row, then the smaller id.
+/// Spends left pointing at a deleted person land on the one person who currently has none.
+func faceForOrphanSpends(people: [(id: String, referenced: Bool)]) -> String? {
+    let unused = people.filter { !$0.referenced }
+    return unused.count == 1 ? unused[0].id : nil
+}
+
 func keptDuplicate(_ rows: [DuplicateRow]) -> String? {
     guard !rows.isEmpty else { return nil }
     return rows.max { a, b in

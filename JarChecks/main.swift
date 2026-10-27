@@ -161,6 +161,9 @@ check(keptDuplicate([
 ]) == "a", "equal people keep the smaller id")
 check(keptDuplicate([DuplicateRow(id: "only", updatedAt: "2026-10-26T12:00:00.000Z", uses: 1)]) == "only", "one copy stays")
 check(keptDuplicate([]) == nil, "nothing to keep")
+check(faceForOrphanSpends(people: [(id: "kevin", referenced: true), (id: "bridget", referenced: false)]) == "bridget", "orphaned spends belong to the person with none")
+check(faceForOrphanSpends(people: [(id: "kevin", referenced: true), (id: "bridget", referenced: true)]) == nil, "everyone already has spends")
+check(faceForOrphanSpends(people: [(id: "kevin", referenced: false), (id: "bridget", referenced: false)]) == nil, "two empty people stay put")
 check(snacks.jar == 4400 && snacks.debt == 0, "projected bank")
 check(replay([]).jar == 0 && replay([]).debt == 0, "open day stays unsettled")
 

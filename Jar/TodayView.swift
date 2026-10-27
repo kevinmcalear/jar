@@ -207,7 +207,11 @@ struct TodayView: View {
         let person = model.snapshot.people.first { $0.id == entry.personID }
         let category = model.snapshot.categories.first { $0.id == entry.categoryID }
         return HStack(spacing: 10) {
-            PersonSticker(sticker: person?.sticker ?? "kevin", name: person?.displayName ?? "")
+            if let person {
+                PersonSticker(sticker: person.sticker, name: person.displayName)
+            } else {
+                CustomSeal(name: "").frame(width: 44, height: 44)
+            }
             CategoryMark(builtIn: category?.builtIn, name: category?.name ?? "")
             VStack(alignment: .leading, spacing: 2) {
                 Text(person?.displayName ?? "")
