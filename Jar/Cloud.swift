@@ -19,6 +19,24 @@ enum InviteShareError: LocalizedError {
     }
 }
 
+func entrySaveProblem(_ error: CKError) -> EntrySaveProblem {
+    if error.code == .partialFailure, let inner = error.partialErrorsByItemID?.values.compactMap({ $0 as? CKError }).first(where: { $0.code != .batchRequestFailed }) {
+        return entrySaveProblem(inner)
+    }
+    switch error.code {
+    case .serverRecordChanged:
+        return .conflict
+    case .serverRejectedRequest, .invalidArguments:
+        return .schema
+    case .referenceViolation, .unknownItem:
+        return .missingReference
+    case .batchRequestFailed:
+        return .batch
+    default:
+        return .other
+    }
+}
+
 func shareFailureText(_ error: Error) -> String {
     guard let ck = error as? CKError else { return "Jar could not join the household. Open the invite again." }
     switch ck.code {
@@ -89,6 +107,9 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
         model?.healLostFaces()
         model?.publishRoster()
         model?.republishIfNeeded()
+        if model?.repushLocalEntries() == true {
+            try? await writer?.sendChanges()
+        }
     }
 
     /// Link first, then the caller opens Messages. A collaboration item prepares inside that sheet and never finishes.
@@ -227,13 +248,34 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
             }
             await model?.flushNotices()
         case .sentRecordZoneChanges(let sent):
+            for record in sent.savedRecords { model?.rememberSystemFields(record) }
             for failure in sent.failedRecordSaves {
+                let name = failure.record.recordID.recordName
                 if let server = failure.error.serverRecord {
+                    model?.rememberSystemFields(server)
                     model?.apply(server)
-                } else if UserDefaults.standard.bool(forKey: "jar.republish") || UserDefaults.standard.bool(forKey: "jar.republishArmed") {
+                    continue
+                }
+                if UserDefaults.standard.bool(forKey: "jar.republish") || UserDefaults.standard.bool(forKey: "jar.republishArmed") {
                     UserDefaults.standard.set(true, forKey: "jar.republish")
                     UserDefaults.standard.set(false, forKey: "jar.republishArmed")
                 }
+                let problem = entrySaveProblem(failure.error)
+                let attempt = model?.saveAttempts[name] ?? 0
+                let dropped = model?.bareEntryIDs.contains(name) == true
+                let decision = entryRetry(problem: problem, attempt: attempt, alreadyDroppedReferences: dropped)
+                model?.saveAttempts[name] = attempt + 1
+                if decision.dropReferences { model?.markBareEntry(name) }
+                if decision.retry { model?.sync.enqueueSave(name) }
+            }
+            for (id, error) in sent.failedRecordDeletes {
+                let code = (error as? CKError)?.code
+                if code == .unknownItem || code == .zoneNotFound { continue }
+                let name = id.recordName
+                let attempt = model?.saveAttempts[name] ?? 0
+                guard attempt < 2 else { continue }
+                model?.saveAttempts[name] = attempt + 1
+                model?.sync.enqueueDelete(name)
             }
         case .sentDatabaseChanges(let sent):
             if !sent.failedZoneSaves.isEmpty, UserDefaults.standard.bool(forKey: "jar.republishArmed") {
@@ -311,11 +353,59 @@ extension AppModel {
         return CKRecordZone.ID(zoneName: "household", ownerName: owner)
     }
 
+    func repushLocalEntries() -> Bool {
+        guard !UserDefaults.standard.bool(forKey: "jar.repushLocal") else { return false }
+        UserDefaults.standard.set(true, forKey: "jar.repushLocal")
+        let mine = snapshot.entries.filter(\.originLocal)
+        mine.forEach { sync.enqueueSave($0.id) }
+        return !mine.isEmpty
+    }
+
+    func markBareEntry(_ name: String) {
+        var bare = bareEntryIDs
+        bare.insert(name)
+        UserDefaults.standard.set(Array(bare), forKey: "jar.bareEntries")
+    }
+
+    var bareEntryIDs: Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: "jar.bareEntries") ?? [])
+    }
+
+    func loadSystemFields() {
+        guard let url = systemFieldsURL, let data = try? Data(contentsOf: url),
+              let raw = try? JSONDecoder().decode([String: String].self, from: data) else { return }
+        systemFields = raw.compactMapValues { Data(base64Encoded: $0) }
+    }
+
+    func rememberSystemFields(_ record: CKRecord) {
+        let coder = NSKeyedArchiver(requiringSecureCoding: true)
+        record.encodeSystemFields(with: coder)
+        coder.finishEncoding()
+        systemFields[record.recordID.recordName] = coder.encodedData
+        guard let url = systemFieldsURL, let data = try? JSONEncoder().encode(systemFields.mapValues { $0.base64EncodedString() }) else { return }
+        try? data.write(to: url, options: .atomic)
+    }
+
+    func cloudRecord(type: String, name: String) -> CKRecord {
+        if let data = systemFields[name], let coder = try? NSKeyedUnarchiver(forReadingFrom: data) {
+            coder.requiresSecureCoding = true
+            if let record = CKRecord(coder: coder) {
+                coder.finishDecoding()
+                return record
+            }
+            coder.finishDecoding()
+        }
+        return CKRecord(recordType: type, recordID: CKRecord.ID(recordName: name, zoneID: zoneID))
+    }
+
+    private var systemFieldsURL: URL? {
+        sync.directory?.appendingPathComponent("system-fields.json")
+    }
+
     func makeRecord(name: String) -> CKRecord? {
         guard let key else { return nil }
-        let id = CKRecord.ID(recordName: name, zoneID: zoneID)
         if name == "settings", let settings = snapshot.settings {
-            let record = CKRecord(recordType: "Settings", recordID: id)
+            let record = cloudRecord(type: "Settings", name: name)
             record["timezone"] = settings.timezone as NSString
             record["closeHour"] = settings.closeHour as NSNumber
             record["usualCapChangedAt"] = date(from: settings.usualCapChangedAt) as NSDate?
@@ -330,13 +420,13 @@ extension AppModel {
             return record
         }
         if let person = snapshot.people.first(where: { $0.id == name }) {
-            let record = CKRecord(recordType: "Person", recordID: id)
+            let record = cloudRecord(type: "Person", name: name)
             record["displayName"] = person.displayName as NSString
             record["sticker"] = person.sticker as NSString
             return record
         }
         if let category = snapshot.categories.first(where: { $0.id == name }) {
-            let record = CKRecord(recordType: "Category", recordID: id)
+            let record = cloudRecord(type: "Category", name: name)
             record["name"] = category.name as NSString
             record["enabled"] = (category.enabled ? 1 : 0) as NSNumber
             if let builtIn = category.builtIn { record["builtIn"] = builtIn as NSString }
@@ -345,26 +435,25 @@ extension AppModel {
             return record
         }
         if let day = snapshot.days.first(where: { $0.date == name }) {
-            let record = CKRecord(recordType: "Day", recordID: id)
+            let record = cloudRecord(type: "Day", name: name)
             assign(record, "cap", sealCents(day.cap, name, "cap"))
             return record
         }
         if let entry = snapshot.entries.first(where: { $0.id == name }) {
-            let record = CKRecord(recordType: "Entry", recordID: id)
+            let record = cloudRecord(type: "Entry", name: name)
             record["day"] = entry.day as NSString
-            if let personID = entry.personID {
+            // ponytail: personName, personSticker, and categoryName are not in the production schema. Sending them makes CloudKit reject the whole spend, so the other phone never sees it and never gets a push. The notice uses the person and category records. Add the name fields back after a schema deploy.
+            let bare = bareEntryIDs.contains(name)
+            if let personID = entry.personID, !bare {
                 record["person"] = reference(personID)
-                if let person = snapshot.people.first(where: { $0.id == personID }) {
-                    record["personName"] = person.displayName as NSString
-                    record["personSticker"] = person.sticker as NSString
-                }
+            } else if bare {
+                record["person"] = nil
             }
             record["kind"] = entry.kind as NSString
-            if let categoryID = entry.categoryID {
+            if let categoryID = entry.categoryID, !bare {
                 record["category"] = reference(categoryID)
-                if let name = snapshot.categories.first(where: { $0.id == categoryID })?.name {
-                    record["categoryName"] = name as NSString
-                }
+            } else if bare {
+                record["category"] = nil
             }
             if let chip = entry.chip { record["chip"] = chip as NSString }
             if let rhythm = entry.rhythm { record["rhythm"] = rhythm as NSString }
@@ -383,7 +472,7 @@ extension AppModel {
         }
         if let row = snapshot.income.first(where: { $0.id == name }) ?? snapshot.bills.first(where: { $0.id == name }) {
             let type = snapshot.income.contains(where: { $0.id == name }) ? "IncomeSource" : "Bill"
-            let record = CKRecord(recordType: type, recordID: id)
+            let record = cloudRecord(type: type, name: name)
             record["name"] = row.name as NSString
             record["rhythm"] = row.rhythm as NSString
             assign(record, "amount", sealCents(row.amount, name, "amount"))
@@ -393,6 +482,7 @@ extension AppModel {
     }
 
     func apply(_ record: CKRecord) {
+        rememberSystemFields(record)
         if record.recordType != "Person", record.recordType != "Category", !canReadSealed(record) {
             if record.recordType == "Settings" {
                 applySettings(record)

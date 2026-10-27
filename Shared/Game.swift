@@ -355,6 +355,31 @@ func shovePlan(
     )
 }
 
+enum EntrySaveProblem: Equatable {
+    case conflict
+    case schema
+    case missingReference
+    case batch
+    case other
+}
+
+struct EntryRetry: Equatable {
+    var retry: Bool
+    var dropReferences: Bool
+}
+
+/// A rejected upload has to be sent again. A conflict means the server already has the record. A dangling person or category is dropped once so the spend itself still uploads.
+func entryRetry(problem: EntrySaveProblem, attempt: Int, alreadyDroppedReferences: Bool) -> EntryRetry {
+    switch problem {
+    case .conflict:
+        return EntryRetry(retry: false, dropReferences: false)
+    case .missingReference:
+        return EntryRetry(retry: attempt < 2 && !alreadyDroppedReferences, dropReferences: true)
+    case .schema, .batch, .other:
+        return EntryRetry(retry: attempt < 2, dropReferences: alreadyDroppedReferences)
+    }
+}
+
 /// A household zone in the shared database means this phone joined someone else's jar.
 /// An empty lookup keeps the current role: a failed fetch must not turn a participant back into an owner.
 func adoptSharedZone(isOwner: Bool, zoneOwner: String?, sharedZoneOwners: [String]) -> (isOwner: Bool, zoneOwner: String?) {

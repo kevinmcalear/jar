@@ -36,6 +36,8 @@ final class AppModel {
     var editEntryID: String?
     var tab = "today"
     var pendingNotices: [SpendNotice] = []
+    @ObservationIgnored var saveAttempts: [String: Int] = [:]
+    @ObservationIgnored var systemFields: [String: Data] = [:]
     var key: SymmetricKey?
     var waiting: [CKRecord] = []
     let sync = HouseholdSync()
@@ -112,6 +114,7 @@ final class AppModel {
             snapshot = try store.load()
             sync.model = self
             sync.directory = store.directory
+            loadSystemFields()
             loadWaiting()
             if snapshot.settings != nil {
                 applyRelink()

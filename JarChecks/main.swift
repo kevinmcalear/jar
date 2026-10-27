@@ -130,6 +130,11 @@ check(adoptSharedZone(isOwner: false, zoneOwner: "kevin", sharedZoneOwners: []).
 let joined = adoptSharedZone(isOwner: true, zoneOwner: nil, sharedZoneOwners: ["kevin"])
 check(!joined.isOwner && joined.zoneOwner == "kevin", "shared zone joins their jar")
 check(adoptSharedZone(isOwner: false, zoneOwner: "kevin", sharedZoneOwners: ["bridget", "kevin"]).zoneOwner == "kevin", "keeps the zone already joined")
+check(entryRetry(problem: .schema, attempt: 0, alreadyDroppedReferences: false).retry, "a rejected spend is sent again")
+check(!entryRetry(problem: .conflict, attempt: 0, alreadyDroppedReferences: false).retry, "the server copy is already there")
+check(entryRetry(problem: .missingReference, attempt: 0, alreadyDroppedReferences: false) == EntryRetry(retry: true, dropReferences: true), "a missing person does not block the spend")
+check(!entryRetry(problem: .missingReference, attempt: 1, alreadyDroppedReferences: true).retry, "a bare spend is not retried forever")
+check(!entryRetry(problem: .batch, attempt: 2, alreadyDroppedReferences: false).retry, "give up after two failures")
 
 let snacks = project(jar: 0, debt: 0, cap: 5000, spent: 600)
 check(5000 - 600 == 4400, "remainder")
