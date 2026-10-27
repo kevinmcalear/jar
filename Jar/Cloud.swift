@@ -3,44 +3,26 @@ import Foundation
 
 enum InviteShareError: LocalizedError {
     case noLink
-    var errorDescription: String? { "iCloud did not return an invite link." }
-}
+    case noAccount
+    case restricted
+    case unavailable
+    case timedOut
 
-/// Runs off the main actor. The share sheet waits on this, and hopping to the main actor there never finishes.
-nonisolated func prepareHouseholdShare() async throws -> CKShare {
-    let database = CKContainer(identifier: "iCloud.com.kevinmcalear.dailyjar").privateCloudDatabase
-    let zoneID = CKRecordZone.ID(zoneName: "household", ownerName: CKCurrentUserDefaultName)
-    _ = try await database.modifyRecordZones(saving: [CKRecordZone(zoneID: zoneID)], deleting: [])
-    let shareID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zoneID)
-    if let existing = try await zoneShare(database, shareID) { return marked(existing) }
-    let share = CKShare(recordZoneID: zoneID)
-    share.publicPermission = CKShare.ParticipantPermission.none
-    share[CKShare.SystemFieldKey.title] = "Jar" as NSString
-    let saved = try await database.modifyRecords(saving: [share], deleting: [])
-    for result in saved.saveResults.values {
-        switch result {
-        case let .success(record):
-            if let share = record as? CKShare, share.url != nil { return marked(share) }
-        case let .failure(error):
-            if let share = (error as? CKError)?.serverRecord as? CKShare, share.url != nil { return marked(share) }
+    var errorDescription: String? {
+        switch self {
+        case .noLink: "iCloud did not return an invite link."
+        case .noAccount: "Sign in to iCloud to invite the other phone."
+        case .restricted: "iCloud is restricted on this phone."
+        case .unavailable: "iCloud is temporarily unavailable. Try again."
+        case .timedOut: "iCloud took too long to make the invite link."
         }
     }
-    if let existing = try await zoneShare(database, shareID) { return marked(existing) }
-    throw InviteShareError.noLink
 }
 
-private nonisolated func zoneShare(_ database: CKDatabase, _ shareID: CKRecord.ID) async throws -> CKShare? {
-    do {
-        guard let share = try await database.record(for: shareID) as? CKShare, share.url != nil else { return nil }
-        return share
-    } catch let error as CKError where error.code == .unknownItem {
-        return nil
-    }
-}
-
-private nonisolated func marked(_ share: CKShare) -> CKShare {
-    UserDefaults.standard.set(true, forKey: "jar.republish")
-    return share
+// ponytail: one 30s race. The Messages card used to wait on this and spun forever; a hung CloudKit callback becomes an error. Raise the bound if an Apple ID prompt needs longer.
+private nonisolated func inviteDeadline() async throws -> URL {
+    try await Task.sleep(for: .seconds(30))
+    throw InviteShareError.timedOut
 }
 
 @MainActor
@@ -82,8 +64,93 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
         model?.republishIfNeeded()
     }
 
-    func makeShare() async throws -> CKShare {
-        try await prepareHouseholdShare()
+    /// Link first, then the caller opens Messages. A collaboration item prepares inside that sheet and never finishes.
+    func inviteLink() async throws -> URL {
+        try await withThrowingTaskGroup(of: URL.self) { group in
+            group.addTask { try await self.householdLink() }
+            group.addTask { try await inviteDeadline() }
+            do {
+                guard let url = try await group.next() else { throw InviteShareError.noLink }
+                group.cancelAll()
+                return url
+            } catch {
+                group.cancelAll()
+                throw error
+            }
+        }
+    }
+
+    private func householdLink() async throws -> URL {
+        switch try await container.accountStatus() {
+        case .available:
+            break
+        case .noAccount:
+            throw InviteShareError.noAccount
+        case .restricted:
+            throw InviteShareError.restricted
+        case .couldNotDetermine, .temporarilyUnavailable:
+            throw InviteShareError.unavailable
+        @unknown default:
+            throw InviteShareError.unavailable
+        }
+        let database = container.privateCloudDatabase
+        let zoneID = CKRecordZone.ID(zoneName: "household", ownerName: CKCurrentUserDefaultName)
+        _ = try await database.modifyRecordZones(saving: [CKRecordZone(zoneID: zoneID)], deleting: [])
+        let shareID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zoneID)
+        if let existing = try await zoneShare(database, shareID) {
+            if existing.publicPermission == .readWrite, let url = existing.url { return remember(url) }
+            existing.publicPermission = .readWrite
+            return try await savedURL(database, existing)
+        }
+        let share = CKShare(recordZoneID: zoneID)
+        share.publicPermission = .readWrite
+        share[CKShare.SystemFieldKey.title] = "Jar" as NSString
+        return try await savedURL(database, share)
+    }
+
+    private func zoneShare(_ database: CKDatabase, _ shareID: CKRecord.ID) async throws -> CKShare? {
+        do {
+            return try await database.record(for: shareID) as? CKShare
+        } catch let error as CKError where error.code == .unknownItem {
+            return nil
+        }
+    }
+
+    private func savedURL(_ database: CKDatabase, _ share: CKShare, retry: Bool = true) async throws -> URL {
+        do {
+            let saved = try await database.modifyRecords(saving: [share], deleting: [])
+            for result in saved.saveResults.values {
+                switch result {
+                case let .success(record):
+                    if let url = (record as? CKShare)?.url { return remember(url) }
+                case let .failure(error):
+                    if let url = try await conflictURL(database, error, retry: retry) { return url }
+                    throw error
+                }
+            }
+        } catch {
+            if let url = try await conflictURL(database, error, retry: retry) { return url }
+            throw error
+        }
+        throw InviteShareError.noLink
+    }
+
+    private func conflictURL(_ database: CKDatabase, _ error: Error, retry: Bool) async throws -> URL? {
+        guard let ck = error as? CKError else { return nil }
+        if ck.code == .partialFailure {
+            guard retry, let inner = ck.partialErrorsByItemID?.values.first else { return nil }
+            return try await conflictURL(database, inner, retry: false)
+        }
+        guard let server = ck.serverRecord as? CKShare else { return nil }
+        if server.publicPermission == .readWrite, let url = server.url { return remember(url) }
+        guard retry else { return nil }
+        server.publicPermission = .readWrite
+        return try await savedURL(database, server, retry: false)
+    }
+
+    private func remember(_ url: URL) -> URL {
+        UserDefaults.standard.set(true, forKey: "jar.republish")
+        return url
     }
 
     func resetSync() {

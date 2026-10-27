@@ -1,4 +1,3 @@
-import CloudKit
 import SwiftUI
 import UIKit
 
@@ -245,6 +244,7 @@ struct SettingsSheet: View {
     @State private var goalText = ""
     @State private var newCategory = ""
     @State private var zoneQuery = ""
+    @State private var inviting = false
 
     var body: some View {
         NavigationStack {
@@ -308,14 +308,17 @@ struct SettingsSheet: View {
                     }
                     .padding(12)
                     .background(Flare.surface, in: RoundedRectangle(cornerRadius: 12))
-                    ShareLink(item: HouseholdInvite(), preview: SharePreview("Jar")) {
-                        Text("Invite the other phone")
+                    Button {
+                        Task { await sendInvite() }
+                    } label: {
+                        Text(inviting ? "Creating the invite…" : "Invite the other phone")
                             .font(.headline)
                             .foregroundStyle(Flare.ground)
                             .frame(maxWidth: .infinity, minHeight: 52)
                             .background(Flare.flare, in: RoundedRectangle(cornerRadius: 16))
                     }
                     .buttonStyle(.plain)
+                    .disabled(inviting)
                     if let error = model.shareError {
                         Text(error).font(.caption).foregroundStyle(Flare.flare)
                     }
@@ -345,6 +348,30 @@ struct SettingsSheet: View {
         let all = TimeZone.knownTimeZoneIdentifiers
         guard !zoneQuery.isEmpty else { return all }
         return all.filter { $0.localizedCaseInsensitiveContains(zoneQuery) }
+    }
+
+    private func sendInvite() async {
+        inviting = true
+        model.shareError = nil
+        defer { inviting = false }
+        do {
+            presentLink(try await model.sync.inviteLink())
+        } catch {
+            model.shareError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    private func presentLink(_ url: URL) {
+        let scene = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }
+        guard let root = scene?.keyWindow?.rootViewController else {
+            model.shareError = "Could not open the share sheet."
+            return
+        }
+        var top = root
+        while let next = top.presentedViewController, !next.isBeingDismissed { top = next }
+        top.present(UIActivityViewController(activityItems: [url], applicationActivities: nil), animated: true)
     }
 
     private func enabled(_ category: JarCategory) -> Binding<Bool> {
@@ -525,16 +552,3 @@ private func jpegData(_ image: UIImage) -> Data? {
     return rendered.jpegData(compressionQuality: 0.7)
 }
 
-private struct HouseholdInvite: Transferable {
-    static var transferRepresentation: some TransferRepresentation {
-        let options = CKAllowedSharingOptions(
-            allowedParticipantPermissionOptions: .readWrite,
-            allowedParticipantAccessOptions: .specifiedRecipientsOnly
-        )
-        return CKShareTransferRepresentation { (_: HouseholdInvite) in
-            .prepareShare(container: CKContainer(identifier: "iCloud.com.kevinmcalear.dailyjar"), allowedSharingOptions: options) {
-                try await prepareHouseholdShare()
-            }
-        }
-    }
-}
