@@ -2,6 +2,7 @@ import CloudKit
 import CryptoKit
 import Foundation
 import Observation
+import WidgetKit
 
 struct ShoveShow: Identifiable, Equatable {
     var id: String { dates.joined(separator: ",") }
@@ -23,6 +24,7 @@ final class AppModel {
     var morningNote: String?
     var shove: ShoveShow?
     var addToken: SheetToken?
+    var pendingAdd = false
     var outsideToken: SheetToken?
     var settingsToken: SheetToken?
     var shareToken: SheetToken?
@@ -111,6 +113,17 @@ final class AppModel {
             loadError = error.localizedDescription
         }
         booted = true
+        publishPile()
+    }
+
+    func openAdd() {
+        guard unlocked, snapshot.settings != nil else {
+            pendingAdd = true
+            return
+        }
+        pendingAdd = false
+        tab = "today"
+        addToken = SheetToken()
     }
 
     private func alignCategories() {
@@ -153,6 +166,7 @@ final class AppModel {
         }
         unlocked = key != nil
         guard unlocked else { return }
+        if pendingAdd { openAdd() }
         sync.start()
         drainWaiting()
         catchUp()
@@ -174,6 +188,7 @@ final class AppModel {
         key = derived
         try? saveHouseholdKey(derived)
         unlocked = true
+        if pendingAdd { openAdd() }
         sync.start()
         drainWaiting()
         catchUp()
@@ -439,6 +454,13 @@ final class AppModel {
 
     func reload() {
         if let store, let snapshot = try? store.load() { self.snapshot = snapshot }
+        publishPile()
+    }
+
+    private func publishPile() {
+        guard snapshot.settings != nil else { return }
+        PileBoard.write(pileLeftCents(cap: todayCap, spent: todaySpent))
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     private func settledDays() -> [DayRow] {

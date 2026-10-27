@@ -7,11 +7,11 @@ struct AddSheet: View {
     @State private var step = JarLogStep.category
     @State private var typed = ""
     @State private var categoryID: String?
-    @State private var photo: Data?
     @State private var showCamera = false
     @State private var naming = false
     @State private var newName = ""
     @State private var working = false
+    @State private var saving = false
     @FocusState private var nameFocused: Bool
 
     var body: some View {
@@ -21,7 +21,6 @@ struct AddSheet: View {
                 case .category: categoryStep
                 case .amount: amountStep
                 case .photo: photoStep
-                case .sticker: stickerStep
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -50,8 +49,10 @@ struct AddSheet: View {
         .sheet(isPresented: $showCamera) {
             CameraPicker { data in
                 guard let data else { return }
-                photo = data
-                if let next = nextJarStep(.photo, tookPhoto: true) { step = next }
+                working = true
+                Task { @MainActor in
+                    finish(photo: stickerPNG(data) ?? data)
+                }
             }
         }
     }
@@ -105,70 +106,72 @@ struct AddSheet: View {
                 .background(Flare.surface, in: RoundedRectangle(cornerRadius: 16))
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var amountStep: some View {
         VStack(spacing: 16) {
-            Spacer()
             Text(typed.isEmpty ? "$0" : "$\(typed)")
                 .font(Flare.number(64))
                 .foregroundStyle(Flare.paper)
                 .frame(maxWidth: .infinity)
             MoneyPad(typed: $typed)
-            Spacer()
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var photoStep: some View {
-        VStack(spacing: 12) {
-            Spacer()
-            Button("Take one") {
+        VStack(spacing: 16) {
+            Button {
                 showCamera = UIImagePickerController.isSourceTypeAvailable(.camera)
+            } label: {
+                cameraGlass
             }
-            .font(.headline)
-            .foregroundStyle(Flare.ground)
-            .frame(maxWidth: .infinity, minHeight: 56)
-            .background(Flare.flare, in: RoundedRectangle(cornerRadius: 16))
-            .disabled(!UIImagePickerController.isSourceTypeAvailable(.camera))
-            Button("Skip") {
-                photo = nil
-                save(stickerize: false)
-            }
-            .font(.headline)
-            .foregroundStyle(Flare.paper)
-            .frame(maxWidth: .infinity, minHeight: 52)
-            Spacer()
+            .buttonStyle(.plain)
+            .disabled(working || saving || !UIImagePickerController.isSourceTypeAvailable(.camera))
+            Button("Skip") { finish(photo: nil) }
+                .font(.headline)
+                .foregroundStyle(Flare.muted)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .disabled(working || saving)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    private var stickerStep: some View {
-        VStack(spacing: 12) {
-            if let photo, let image = UIImage(data: photo) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: 280)
+    private var cameraGlass: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(Flare.surface)
+            FinderCorners()
+                .stroke(Flare.paper, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                .padding(28)
+            VStack(spacing: 18) {
+                if working {
+                    ProgressView().tint(Flare.paper)
+                    Text("Cutting the sticker")
+                        .font(.headline)
+                        .foregroundStyle(Flare.paper)
+                } else {
+                    Text("Take a photo")
+                        .font(.headline)
+                        .foregroundStyle(Flare.paper)
+                    ZStack {
+                        Circle().stroke(Flare.paper, lineWidth: 4)
+                        Circle().fill(Flare.flare).padding(7)
+                    }
+                    .frame(width: 78, height: 78)
+                }
             }
-            Spacer(minLength: 0)
-            Button("Stickerify", action: stickerize)
-                .font(.headline)
-                .foregroundStyle(Flare.ground)
-                .frame(maxWidth: .infinity, minHeight: 56)
-                .background(Flare.flare, in: RoundedRectangle(cornerRadius: 16))
-                .disabled(working || photo == nil)
-            Button("Skip") { save(stickerize: false) }
-                .font(.headline)
-                .foregroundStyle(Flare.paper)
-                .frame(maxWidth: .infinity, minHeight: 52)
-                .disabled(working)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(Flare.line, lineWidth: 1))
+        .accessibilityLabel("Take a photo")
     }
 
     private func back() {
         switch step {
         case .amount: step = .category
         case .photo: step = .amount
-        case .sticker: step = .photo
         case .category: break
         }
     }
@@ -181,20 +184,10 @@ struct AddSheet: View {
         naming = false
     }
 
-    private func stickerize() {
-        guard let photo, let categoryID, !working else { return }
-        working = true
-        let amount = cents(typed: typed)
-        let bytes = photo
-        let saved = stickerPNG(bytes) ?? bytes
-        model.logJar(amount: amount, categoryID: categoryID, photo: saved)
-        dismiss()
-    }
-
-    private func save(stickerize: Bool) {
-        guard let categoryID, cents(typed: typed) > 0, !working else { return }
-        let saved: Data? = stickerize ? photo.flatMap { stickerPNG($0) ?? $0 } : (step == .sticker ? photo : nil)
-        model.logJar(amount: cents(typed: typed), categoryID: categoryID, photo: saved)
+    private func finish(photo: Data?) {
+        guard let categoryID, cents(typed: typed) > 0, !saving else { return }
+        saving = true
+        model.logJar(amount: cents(typed: typed), categoryID: categoryID, photo: photo)
         dismiss()
     }
 }
@@ -466,6 +459,25 @@ struct YesterdaySheet: View {
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+    }
+}
+
+private nonisolated struct FinderCorners: Shape {
+    func path(in rect: CGRect) -> Path {
+        let arm: CGFloat = 28
+        var path = Path()
+        let corners: [(CGFloat, CGFloat, CGFloat, CGFloat)] = [
+            (rect.minX, rect.minY, 1, 1),
+            (rect.maxX, rect.minY, -1, 1),
+            (rect.minX, rect.maxY, 1, -1),
+            (rect.maxX, rect.maxY, -1, -1),
+        ]
+        for (x, y, dx, dy) in corners {
+            path.move(to: CGPoint(x: x, y: y + dy * arm))
+            path.addLine(to: CGPoint(x: x, y: y))
+            path.addLine(to: CGPoint(x: x + dx * arm, y: y))
+        }
+        return path
     }
 }
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum Flare {
     static let ground = Color(red: 0x0E / 255, green: 0x0E / 255, blue: 0x0E / 255)
@@ -188,15 +189,18 @@ struct CustomSeal: View {
     }
 }
 
-struct PhotoFrame: View {
+struct PurchaseSticker: View {
+    var data: Data
+    var side: CGFloat = 48
+
     var body: some View {
-        Text("Photo")
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(Flare.flare)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Flare.flare, lineWidth: 1))
-            .accessibilityLabel("Photo")
+        if let image = UIImage(data: data) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(width: side, height: side)
+                .accessibilityLabel("Photo")
+        }
     }
 }
 

@@ -20,6 +20,10 @@ struct RootView: View {
         .background(Flare.ground.ignoresSafeArea())
         .preferredColorScheme(model.picture.climbs ? .light : .dark)
         .task { model.boot(); await model.wake() }
+        .onOpenURL { url in
+            guard url.scheme == PileBoard.add.scheme, url.host == PileBoard.add.host else { return }
+            model.openAdd()
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { model.lock() }
             if phase == .active { Task { await model.wake() } }

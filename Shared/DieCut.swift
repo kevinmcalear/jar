@@ -2,15 +2,14 @@ import CoreGraphics
 import Foundation
 
 enum JarLogStep: Equatable {
-    case category, amount, photo, sticker
+    case category, amount, photo
 }
 
-func nextJarStep(_ step: JarLogStep, tookPhoto: Bool) -> JarLogStep? {
+func nextJarStep(_ step: JarLogStep, tookPhoto _: Bool) -> JarLogStep? {
     switch step {
     case .category: .amount
     case .amount: .photo
-    case .photo: tookPhoto ? .sticker : nil
-    case .sticker: nil
+    case .photo: nil
     }
 }
 

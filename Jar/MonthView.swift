@@ -151,7 +151,7 @@ struct MonthView: View {
                         Text(category?.name ?? "").font(.caption).foregroundStyle(Flare.muted)
                     }
                     Spacer()
-                    if entry.photo != nil { PhotoFrame() }
+                    if let photo = entry.photo { PurchaseSticker(data: photo, side: 40) }
                     Text(formatCents(entry.amount)).foregroundStyle(Flare.paper)
                 }
             }

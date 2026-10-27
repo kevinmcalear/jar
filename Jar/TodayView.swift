@@ -56,10 +56,22 @@ struct TodayView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 28)
+            .padding(.bottom, 108)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background((climb ? Flare.flare : Flare.ground).ignoresSafeArea())
+        .overlay(alignment: .bottomTrailing) {
+            Button { model.addToken = SheetToken() } label: {
+                Image(systemName: "plus")
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(climb ? Flare.paper : Flare.ground)
+                    .frame(width: 56, height: 56)
+                    .background(climb ? Flare.ground : Flare.flare, in: Circle())
+            }
+            .accessibilityLabel("Add something")
+            .padding(.trailing, 20)
+            .padding(.bottom, 16)
+        }
         .navigationTitle("Today")
         .navigationSubtitle(model.todaySubtitle)
         .navigationBarTitleDisplayMode(.large)
@@ -68,10 +80,6 @@ struct TodayView: View {
             ToolbarItem(placement: .topBarLeading) {
                 Button { model.settingsToken = SheetToken() } label: { Image(systemName: "gearshape") }
                     .accessibilityLabel("Settings")
-            }
-            ToolbarItem(placement: .topBarPinnedTrailing) {
-                Button { model.addToken = SheetToken() } label: { Image(systemName: "plus") }
-                    .accessibilityLabel("Add something")
             }
         }
     }
@@ -194,7 +202,7 @@ struct TodayView: View {
                     .foregroundStyle(Flare.muted)
             }
             Spacer(minLength: 8)
-            if entry.photo != nil { PhotoFrame() }
+            if let photo = entry.photo { PurchaseSticker(data: photo) }
             Text(formatCents(entry.amount))
                 .font(Flare.number(20))
                 .foregroundStyle(Flare.paper)

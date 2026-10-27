@@ -9,7 +9,12 @@
 /* Begin PBXFileReference section */
 		A10000000000000000000001 /* Jar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Jar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000002 /* JarChecks */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = JarChecks; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000060 /* JarWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = JarWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXBuildFile section */
+		A10000000000000000000063 /* JarWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A10000000000000000000060 /* JarWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
 		A10000000000000000000004 /* Exceptions for "Jar" folder in "Jar" target */ = {
@@ -41,6 +46,22 @@
 			path = JarChecks;
 			sourceTree = "<group>";
 		};
+		A10000000000000000000062 /* Exceptions for "JarWidget" folder in "JarWidget" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				JarWidget.entitlements,
+			);
+			target = A10000000000000000000064 /* JarWidget */;
+		};
+		A10000000000000000000061 /* JarWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A10000000000000000000062 /* Exceptions for "JarWidget" folder in "JarWidget" target */,
+			);
+			path = JarWidget;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -58,6 +79,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A10000000000000000000066 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -67,6 +95,7 @@
 				A10000000000000000000003 /* Jar */,
 				A10000000000000000000005 /* Shared */,
 				A10000000000000000000006 /* JarChecks */,
+				A10000000000000000000061 /* JarWidget */,
 				A10000000000000000000021 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -76,6 +105,7 @@
 			children = (
 				A10000000000000000000001 /* Jar.app */,
 				A10000000000000000000002 /* JarChecks */,
+				A10000000000000000000060 /* JarWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -90,10 +120,12 @@
 				A10000000000000000000013 /* Sources */,
 				A10000000000000000000011 /* Frameworks */,
 				A10000000000000000000015 /* Resources */,
+				A10000000000000000000068 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A10000000000000000000069 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				A10000000000000000000003 /* Jar */,
@@ -124,6 +156,27 @@
 			productReference = A10000000000000000000002 /* JarChecks */;
 			productType = "com.apple.product-type.tool";
 		};
+		A10000000000000000000064 /* JarWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1000000000000000000006D /* Build configuration list for PBXNativeTarget "JarWidget" */;
+			buildPhases = (
+				A10000000000000000000065 /* Sources */,
+				A10000000000000000000066 /* Frameworks */,
+				A10000000000000000000067 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A10000000000000000000061 /* JarWidget */,
+				A10000000000000000000005 /* Shared */,
+			);
+			name = JarWidget;
+			productName = JarWidget;
+			productReference = A10000000000000000000060 /* JarWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -137,6 +190,9 @@
 						CreatedOnToolsVersion = 27.1;
 					};
 					A10000000000000000000016 = {
+						CreatedOnToolsVersion = 27.1;
+					};
+					A10000000000000000000064 = {
 						CreatedOnToolsVersion = 27.1;
 					};
 				};
@@ -157,6 +213,7 @@
 			targets = (
 				A10000000000000000000010 /* Jar */,
 				A10000000000000000000016 /* JarChecks */,
+				A10000000000000000000064 /* JarWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -186,7 +243,56 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A10000000000000000000065 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A10000000000000000000067 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A10000000000000000000068 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A10000000000000000000063 /* JarWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXContainerItemProxy section */
+		A1000000000000000000006A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000000000000000000022 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A10000000000000000000064;
+			remoteInfo = JarWidget;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		A10000000000000000000069 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A10000000000000000000064 /* JarWidget */;
+			targetProxy = A1000000000000000000006A /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A10000000000000000000040 /* Debug */ = {
@@ -332,6 +438,60 @@
 			};
 			name = Release;
 		};
+		A1000000000000000000006B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = JarWidget/JarWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = P58KM93MV5;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = JarWidget/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kevinmcalear.jar.widget;
+				PRODUCT_NAME = JarWidget;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A1000000000000000000006C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = JarWidget/JarWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = P58KM93MV5;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = JarWidget/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kevinmcalear.jar.widget;
+				PRODUCT_NAME = JarWidget;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -349,6 +509,15 @@
 			buildConfigurations = (
 				A10000000000000000000044 /* Debug */,
 				A10000000000000000000045 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1000000000000000000006D /* Build configuration list for PBXNativeTarget "JarWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1000000000000000000006B /* Debug */,
+				A1000000000000000000006C /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
