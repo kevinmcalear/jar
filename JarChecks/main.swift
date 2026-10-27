@@ -129,6 +129,12 @@ check(adoptSharedZone(isOwner: false, zoneOwner: "kevin", sharedZoneOwners: ["br
 let snacks = project(jar: 0, debt: 0, cap: 5000, spent: 600)
 check(5000 - 600 == 4400, "remainder")
 check(pile(remainderCents: 4400).filter(\.full).count == 4 && pile(remainderCents: 4400).last?.cents == 400, "short bill")
+check(billRowWidth(pile(remainderCents: 5000)) == 392, "five bills")
+check(billRowWidth(pile(remainderCents: 4400)) == 366, "short bill width")
+check(billRowWidth([]) == 0, "no bills")
+check(isCloudKitShareURL(URL(string: "https://www.icloud.com/share/0abc")!), "icloud share link")
+check(!isCloudKitShareURL(URL(string: "jar://add")!), "widget link is not a share")
+check(!isCloudKitShareURL(URL(string: "https://www.icloud.com/notes/")!), "other icloud page")
 check(snacks.jar == 4400 && snacks.debt == 0, "projected bank")
 check(replay([]).jar == 0 && replay([]).debt == 0, "open day stays unsettled")
 

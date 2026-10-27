@@ -21,6 +21,10 @@ struct RootView: View {
         .preferredColorScheme(model.picture.climbs ? .light : .dark)
         .task { model.boot(); await model.wake() }
         .onOpenURL { url in
+            if isCloudKitShareURL(url) {
+                Task { await model.acceptShare(url: url) }
+                return
+            }
             guard url.scheme == PileBoard.add.scheme, url.host == PileBoard.add.host else { return }
             model.openAdd()
         }
@@ -33,7 +37,7 @@ struct RootView: View {
     private var main: some View {
         @Bindable var model = model
         return ZStack {
-            TabView(selection: $model.tab) {
+            TabView(selection: tab) {
                 Tab("Today", systemImage: "sun.max", value: "today") {
                     NavigationStack { TodayView() }
                 }
@@ -43,9 +47,28 @@ struct RootView: View {
                 Tab("Year", systemImage: "clock", value: "year") {
                     NavigationStack { YearView() }
                 }
+                Tab("Add", systemImage: "plus", value: "add", role: .prominent) {
+                    Color.clear
+                }
             }
             .toolbarVisibility(model.coversTabs ? .hidden : .visible, for: .tabBar)
             .tint(Flare.paper)
+            if let error = model.shareError {
+                Text(error)
+                    .font(.subheadline)
+                    .foregroundStyle(Flare.flare)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .allowsHitTesting(false)
+            }
+            if model.coversTabs, model.tab == "today" {
+                addButton
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 16)
+            }
             if let shove = model.shove {
                 ShoveView(shove: shove)
             }
@@ -55,6 +78,29 @@ struct RootView: View {
         .sheet(item: $model.settingsToken) { _ in SettingsSheet() }
         .sheet(item: $model.yesterdayToken) { _ in YesterdaySheet() }
         .sheet(item: editToken) { _ in EditAmountSheet() }
+    }
+
+    private var tab: Binding<String> {
+        Binding {
+            model.tab == "add" ? "today" : model.tab
+        } set: { new in
+            if new == "add" {
+                model.openAdd()
+            } else {
+                model.tab = new
+            }
+        }
+    }
+
+    private var addButton: some View {
+        Button { model.openAdd() } label: {
+            Image(systemName: "plus")
+                .font(.title2.weight(.bold))
+                .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+        .accessibilityLabel("Add something")
     }
 
     private var editToken: Binding<EditID?> {

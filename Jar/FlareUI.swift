@@ -79,6 +79,26 @@ struct BillPile: View {
 
     var body: some View {
         let bills = pile(remainderCents: cents)
+        let width = billRowWidth(bills)
+        Group {
+            if bills.isEmpty || width <= 0 {
+                EmptyView()
+            } else {
+                GeometryReader { geo in
+                    let scale = min(1, geo.size.width / (width + 8))
+                    row(bills)
+                        .frame(width: width, alignment: .leading)
+                        .scaleEffect(scale, anchor: .leading)
+                        .frame(width: geo.size.width, height: 48, alignment: .leading)
+                }
+                .frame(height: 48)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label(bills))
+    }
+
+    private func row(_ bills: [BillFace]) -> some View {
         HStack(spacing: 8) {
             ForEach(Array(bills.enumerated()), id: \.offset) { index, bill in
                 Text(face(bill.cents))
@@ -90,8 +110,6 @@ struct BillPile: View {
                     .rotationEffect(.degrees(Double(index) * 4 - 6))
             }
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(label(bills))
     }
 
     private func face(_ cents: Int) -> String {

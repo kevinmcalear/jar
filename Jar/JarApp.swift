@@ -51,22 +51,36 @@ final class JarDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         application.registerForRemoteNotifications()
     }
 
+    func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        // SwiftUI is scene-based. The app-delegate share callback is not invoked; the scene delegate is.
+        if let metadata = options.cloudKitShareMetadata {
+            Self.accept(metadata)
+        }
+        for context in options.urlContexts where isCloudKitShareURL(context.url) {
+            Self.accept(url: context.url)
+        }
+        let configuration = UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
+        configuration.delegateClass = JarSceneDelegate.self
+        return configuration
+    }
+
     func application(_ application: UIApplication, userDidAcceptCloudKitShareWith metadata: CKShare.Metadata) {
+        Self.accept(metadata)
+    }
+
+    static func accept(_ metadata: CKShare.Metadata) {
         let metadata = metadata
         Task { @MainActor in
-            // Cold launch from the share link runs this before SwiftUI sets `model`.
-            guard let model = self.model ?? Self.held else { return }
-            model.boot()
-            do {
-                _ = try await model.sync.container.accept(metadata)
-                model.joinSharedZone(ownerName: metadata.share.recordID.zoneID.ownerName)
-                model.sync.start()
-                await model.sync.fetch()
-                await model.flushNotices()
-                model.markNoticesLive()
-            } catch {
-                model.shareError = error.localizedDescription
-            }
+            guard let model = JarDelegate.held else { return }
+            await model.acceptShare(metadata)
+        }
+    }
+
+    static func accept(url: URL) {
+        guard isCloudKitShareURL(url) else { return }
+        Task { @MainActor in
+            guard let model = JarDelegate.held else { return }
+            await model.acceptShare(url: url)
         }
     }
 
@@ -77,5 +91,25 @@ final class JarDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         let ready = await appModel?.receiveRemoteChange() ?? false
         if application.applicationState != .active { appModel?.lock() }
         return ready ? .newData : .noData
+    }
+}
+
+@MainActor
+final class JarSceneDelegate: UIResponder, UIWindowSceneDelegate {
+    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
+        if let metadata = connectionOptions.cloudKitShareMetadata {
+            JarDelegate.accept(metadata)
+        }
+        for context in connectionOptions.urlContexts where isCloudKitShareURL(context.url) {
+            JarDelegate.accept(url: context.url)
+        }
+        for activity in connectionOptions.userActivities {
+            guard let url = activity.webpageURL, isCloudKitShareURL(url) else { continue }
+            JarDelegate.accept(url: url)
+        }
+    }
+
+    func windowScene(_ windowScene: UIWindowScene, userDidAcceptCloudKitShareWith cloudKitShareMetadata: CKShare.Metadata) {
+        JarDelegate.accept(cloudKitShareMetadata)
     }
 }

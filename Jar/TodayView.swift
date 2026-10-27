@@ -15,10 +15,14 @@ struct TodayView: View {
                     Text("Climb back \(formatCents(debt)).")
                         .font(Flare.number(52))
                         .foregroundStyle(Flare.ground)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityAddTraits(.isHeader)
                     Text(climbSentence(days: days, usual: usual))
                         .font(Flare.number(22))
                         .foregroundStyle(Flare.ground)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     if remainder > 0 {
                         Text("\(formatCents(remainder)) left today")
                             .font(.title3)
@@ -56,22 +60,10 @@ struct TodayView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 108)
+            .padding(.bottom, 24)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background((climb ? Flare.flare : Flare.ground).ignoresSafeArea())
-        .overlay(alignment: .bottomTrailing) {
-            Button { model.addToken = SheetToken() } label: {
-                Image(systemName: "plus")
-                    .font(.title2.weight(.bold))
-                    .foregroundStyle(climb ? Flare.paper : Flare.ground)
-                    .frame(width: 56, height: 56)
-                    .background(climb ? Flare.ground : Flare.flare, in: Circle())
-            }
-            .accessibilityLabel("Add something")
-            .padding(.trailing, 20)
-            .padding(.bottom, 16)
-        }
         .navigationTitle("Today")
         .navigationSubtitle(model.todaySubtitle)
         .navigationBarTitleDisplayMode(.large)
@@ -90,6 +82,9 @@ struct TodayView: View {
             Text("In the hole by \(formatCents(debt)).")
                 .font(Flare.number(44))
                 .foregroundStyle(Flare.flare)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Text("if the day ended now")
                 .font(.subheadline)
                 .foregroundStyle(Flare.muted)
@@ -99,6 +94,9 @@ struct TodayView: View {
             Text(formatCents(cap))
                 .font(Flare.number(84))
                 .foregroundStyle(ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Text("for today")
                 .font(.title3)
                 .foregroundStyle(Flare.muted)
@@ -106,6 +104,9 @@ struct TodayView: View {
             Text(formatCents(max(0, remainder)))
                 .font(Flare.number(84))
                 .foregroundStyle(ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Text("left of \(formatCents(model.todayCap))")
                 .font(.title3)
                 .foregroundStyle(Flare.muted)
@@ -113,6 +114,9 @@ struct TodayView: View {
             Text(formatCents(0))
                 .font(Flare.number(84))
                 .foregroundStyle(ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Text("left of \(formatCents(model.todayCap))")
                 .font(.title3)
                 .foregroundStyle(Flare.muted)
@@ -130,6 +134,9 @@ struct TodayView: View {
                 Text(formatCents(remainder))
                     .font(Flare.number(36))
                     .foregroundStyle(Flare.paper)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 BillPile(cents: remainder)
             }
         default:
@@ -143,18 +150,24 @@ struct TodayView: View {
             Text("A quiet day shoves \(formatCents(cap)) in at \(closeClock(model.snapshot.settings?.closeHour ?? 4)).")
                 .font(Flare.number(20))
                 .foregroundStyle(Flare.flare)
+                .frame(maxWidth: .infinity, alignment: .leading)
         case .growing(_, let shove, _):
             Text("If the day ended now, \(formatCents(shove)) gets shoved in.")
                 .font(Flare.number(20))
                 .foregroundStyle(Flare.flare)
+                .frame(maxWidth: .infinity, alignment: .leading)
         case .borrowing(let amount):
             Text("Borrowing \(formatCents(amount)) from the jar.")
                 .font(Flare.number(28))
                 .foregroundStyle(Flare.flare)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .frame(maxWidth: .infinity, alignment: .leading)
         case .exact(let cap):
             Text("Today used the whole \(formatCents(cap)).")
                 .font(Flare.number(20))
                 .foregroundStyle(Flare.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
         case .hole, .climb:
             EmptyView()
         }
@@ -173,6 +186,8 @@ struct TodayView: View {
                 Text(formatCents(settled.jar))
                     .font(Flare.number(28))
                     .foregroundStyle(ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
                 Text("in the jar")
                     .font(.subheadline)
                     .foregroundStyle(Flare.muted)
@@ -197,15 +212,20 @@ struct TodayView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(person?.displayName ?? "")
                     .foregroundStyle(Flare.paper)
+                    .lineLimit(1)
                 Text(category?.name ?? "")
                     .font(.subheadline)
                     .foregroundStyle(Flare.muted)
+                    .lineLimit(1)
             }
             Spacer(minLength: 8)
             if let photo = entry.photo { PurchaseSticker(data: photo) }
             Text(formatCents(entry.amount))
                 .font(Flare.number(20))
                 .foregroundStyle(Flare.paper)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .layoutPriority(1)
         }
         .padding(12)
         .background(Flare.surface, in: RoundedRectangle(cornerRadius: 16))

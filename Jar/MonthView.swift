@@ -147,12 +147,12 @@ struct MonthView: View {
                     PersonSticker(sticker: person?.sticker ?? "kevin", name: person?.displayName ?? "", size: 32)
                     CategoryMark(builtIn: category?.builtIn, name: category?.name ?? "", size: 22)
                     VStack(alignment: .leading) {
-                        Text(person?.displayName ?? "").foregroundStyle(Flare.paper)
-                        Text(category?.name ?? "").font(.caption).foregroundStyle(Flare.muted)
+                        Text(person?.displayName ?? "").foregroundStyle(Flare.paper).lineLimit(1)
+                        Text(category?.name ?? "").font(.caption).foregroundStyle(Flare.muted).lineLimit(1)
                     }
-                    Spacer()
+                    Spacer(minLength: 8)
                     if let photo = entry.photo { PurchaseSticker(data: photo, side: 40) }
-                    Text(formatCents(entry.amount)).foregroundStyle(Flare.paper)
+                    Text(formatCents(entry.amount)).foregroundStyle(Flare.paper).lineLimit(1).layoutPriority(1)
                 }
             }
             ForEach(outside) { entry in

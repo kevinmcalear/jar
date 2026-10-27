@@ -23,6 +23,7 @@ final class AppModel {
     private var waking = false
     var loadError: String?
     var shareError: String?
+    var acceptingShare = false
     var morningNote: String?
     var shove: ShoveShow?
     var addToken: SheetToken?

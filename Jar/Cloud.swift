@@ -19,6 +19,18 @@ enum InviteShareError: LocalizedError {
     }
 }
 
+func shareFailureText(_ error: Error) -> String {
+    guard let ck = error as? CKError else { return "Jar could not join the household. Open the invite again." }
+    switch ck.code {
+    case .notAuthenticated:
+        return "Sign in to iCloud on this phone, then open the invite again."
+    case .networkFailure, .networkUnavailable, .serviceUnavailable, .requestRateLimited:
+        return "iCloud could not be reached. Open the invite again."
+    default:
+        return "Jar could not join the household. Open the invite again."
+    }
+}
+
 // ponytail: one 30s race. The Messages card used to wait on this and spun forever; a hung CloudKit callback becomes an error. Raise the bound if an Apple ID prompt needs longer.
 private nonisolated func inviteDeadline() async throws -> URL {
     try await Task.sleep(for: .seconds(30))
@@ -35,13 +47,25 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
     private var queued: [CKSyncEngine.PendingRecordZoneChange] = []
 
     func start() {
-        guard privateEngine == nil else { return }
-        privateEngine = engine(container.privateCloudDatabase, "sync-private.json")
-        sharedEngine = engine(container.sharedCloudDatabase, "sync-shared.json")
+        let fresh = privateEngine == nil && sharedEngine == nil
+        if privateEngine == nil {
+            privateEngine = engine(container.privateCloudDatabase, "sync-private.json")
+        }
+        if sharedEngine == nil {
+            sharedEngine = engine(container.sharedCloudDatabase, "sync-shared.json")
+        }
+        guard fresh else { return }
         let pending = queued
         queued = []
         writer?.state.add(pendingRecordZoneChanges: pending)
         Task { await installSubscriptions() }
+    }
+
+    /// Drop the shared-database cursor so the next fetch downloads the whole household, including spends from before this phone joined.
+    func prepareForAcceptedShare() {
+        sharedEngine = nil
+        guard let directory else { return }
+        try? FileManager.default.removeItem(at: directory.appendingPathComponent("sync-shared.json"))
     }
 
     func enqueueSave(_ name: String) {
@@ -172,7 +196,6 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
         settings.zoneOwner = adopted.zoneOwner
         try? model?.store?.insertSettings(settings)
         model?.reload()
-        UserDefaults.standard.set(true, forKey: "jar.republish")
     }
 
     nonisolated func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
@@ -429,16 +452,66 @@ extension AppModel {
             usualCapSetBy: nil, savingsGoal: nil, kdfSalt: nil, kdfIterations: nil, verifier: nil, holderID: nil,
             isOwner: false, zoneOwner: ownerName
         )
-        let changed = settings.isOwner || settings.zoneOwner != ownerName
         settings.isOwner = false
         settings.zoneOwner = ownerName
         try? store?.insertSettings(settings)
         reload()
-        if changed { UserDefaults.standard.set(true, forKey: "jar.republish") }
+    }
+
+    func acceptShare(url: URL) async {
+        guard isCloudKitShareURL(url) else { return }
+        do {
+            await acceptShare(try await sync.container.shareMetadata(for: url))
+        } catch {
+            shareError = shareFailureText(error)
+        }
+    }
+
+    func acceptShare(_ metadata: CKShare.Metadata) async {
+        guard !acceptingShare else { return }
+        acceptingShare = true
+        defer { acceptingShare = false }
+        boot()
+        let owner = metadata.share.recordID.zoneID.ownerName
+        guard !owner.isEmpty else {
+            shareError = "Jar could not join the household. Open the invite again."
+            return
+        }
+        let container = metadata.containerIdentifier.isEmpty ? sync.container : CKContainer(identifier: metadata.containerIdentifier)
+        do {
+            _ = try await container.accept(metadata)
+        } catch {
+            let zones = (try? await sync.container.sharedCloudDatabase.allRecordZones()) ?? []
+            let joined = zones.contains { $0.zoneID.zoneName == "household" && $0.zoneID.ownerName == owner }
+            if !joined {
+                shareError = shareFailureText(error)
+                return
+            }
+        }
+        shareError = nil
+        let mine = try? await container.userRecordID()
+        let ownsZone = owner == CKCurrentUserDefaultName || mine?.recordName == owner
+        if !ownsZone {
+            joinSharedZone(ownerName: owner)
+            sync.prepareForAcceptedShare()
+        }
+        sync.start()
+        await sync.fetch()
+        if key != nil, opensHousehold() {
+            unlocked = true
+            drainWaiting()
+        } else if snapshot.settings?.verifier != nil {
+            key = nil
+            unlocked = false
+            UserDefaults.standard.set(true, forKey: "jar.passphraseReset")
+        }
+        await flushNotices()
+        markNoticesLive()
+        tab = "month"
     }
 
     func republishIfNeeded() {
-        // ponytail: one flag re-sends the whole household after a join or a passphrase change. Fine for two phones; per-record change tags if the zone gets large.
+        // ponytail: one flag re-sends the whole household after a passphrase change. Fine for two phones; per-record change tags if the zone gets large.
         guard UserDefaults.standard.bool(forKey: "jar.republish"), opensHousehold() else { return }
         sync.enqueueSave("settings")
         snapshot.people.forEach { sync.enqueueSave($0.id) }
@@ -479,6 +552,8 @@ extension AppModel {
         unlocked = false
         deleteHouseholdKey()
         UserDefaults.standard.set(true, forKey: "jar.passphraseReset")
+        // A participant's old local copy must not be written over the household she just joined.
+        guard snapshot.settings?.isOwner != false else { return }
         UserDefaults.standard.set(true, forKey: "jar.republish")
         UserDefaults.standard.set(true, forKey: "jar.resync")
     }

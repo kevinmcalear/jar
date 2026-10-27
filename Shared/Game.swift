@@ -56,6 +56,17 @@ func pile(remainderCents: Int) -> [BillFace] {
     return bills
 }
 
+func billRowWidth(_ bills: [BillFace]) -> CGFloat {
+    let widths = bills.map { bill -> CGFloat in bill.full ? 72 : max(46, 72 * CGFloat(bill.cents) / 1000) }
+    return widths.reduce(0, +) + CGFloat(max(0, bills.count - 1)) * 8
+}
+
+func isCloudKitShareURL(_ url: URL) -> Bool {
+    guard url.scheme?.lowercased() == "https", let host = url.host?.lowercased() else { return false }
+    let shareHost = host == "www.icloud.com" || host == "icloud.com" || host == "share.icloud.com"
+    return shareHost && url.path.lowercased().contains("/share")
+}
+
 func quietDayCount(debt: Int, usualCap: Int) -> Int {
     guard usualCap > 0, debt > 0 else { return 0 }
     return (debt + usualCap - 1) / usualCap
