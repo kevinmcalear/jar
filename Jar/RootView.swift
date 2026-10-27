@@ -29,7 +29,7 @@ struct RootView: View {
             model.openAdd()
         }
         .onChange(of: scenePhase) { previous, phase in
-            if phase == .background { model.lock() }
+            // Stay unlocked while the app is still in memory. Face ID runs on a fresh launch, when the key is gone.
             // The Face ID sheet goes inactive, then active. Waking on that active starts another prompt.
             if previous == .background, phase == .active {
                 Task { await model.wake() }

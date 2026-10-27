@@ -13,6 +13,7 @@ struct AddSheet: View {
     @State private var newName = ""
     @State private var working = false
     @State private var saving = false
+    @State private var note = ""
     @FocusState private var nameFocused: Bool
 
     var body: some View {
@@ -123,6 +124,12 @@ struct AddSheet: View {
 
     private var photoStep: some View {
         VStack(spacing: 16) {
+            TextField("Add a note", text: $note)
+                .font(.title3)
+                .foregroundStyle(Flare.paper)
+                .padding(12)
+                .background(Flare.surface, in: RoundedRectangle(cornerRadius: 12))
+                .submitLabel(.done)
             Button {
                 showCamera = UIImagePickerController.isSourceTypeAvailable(.camera)
             } label: {
@@ -130,7 +137,7 @@ struct AddSheet: View {
             }
             .buttonStyle(.plain)
             .disabled(working || saving || !UIImagePickerController.isSourceTypeAvailable(.camera))
-            Button("Skip") { finish(photo: nil) }
+            Button(note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Skip" : "Save") { finish(photo: nil) }
                 .font(.headline)
                 .foregroundStyle(Flare.muted)
                 .frame(maxWidth: .infinity, minHeight: 44)
@@ -188,7 +195,8 @@ struct AddSheet: View {
     private func finish(photo: Data?) {
         guard let categoryID, cents(typed: typed) > 0, !saving else { return }
         saving = true
-        model.logJar(amount: cents(typed: typed), categoryID: categoryID, photo: photo, day: model.addDay)
+        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        model.logJar(amount: cents(typed: typed), categoryID: categoryID, photo: photo, note: trimmed.isEmpty ? nil : trimmed, day: model.addDay)
         dismiss()
     }
 }

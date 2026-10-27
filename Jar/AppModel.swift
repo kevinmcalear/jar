@@ -375,7 +375,7 @@ final class AppModel {
         reload()
     }
 
-    func logJar(amount: Int, categoryID: String, photo: Data?, day: String? = nil) {
+    func logJar(amount: Int, categoryID: String, photo: Data?, note: String? = nil, day: String? = nil) {
         guard let store, amount > 0, let holder = snapshot.settings?.holderID else { return }
         let target = day ?? openDate
         guard canEditJarDay(target, open: openDate) else { return }
@@ -385,7 +385,8 @@ final class AppModel {
             try? store.clearPourSeen(from: target)
         }
         let now = stamp()
-        let entry = Entry(id: UUID().uuidString, day: target, personID: holder, amount: amount, kind: "jar", categoryID: categoryID, chip: nil, rhythm: nil, note: nil, photo: photo, createdAt: now, updatedAt: now, originLocal: true)
+        let trimmed = note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let entry = Entry(id: UUID().uuidString, day: target, personID: holder, amount: amount, kind: "jar", categoryID: categoryID, chip: nil, rhythm: nil, note: trimmed.isEmpty ? nil : trimmed, photo: photo, createdAt: now, updatedAt: now, originLocal: true)
         try? store.insertEntry(entry)
         reload()
         sync.enqueueSave(entry.id)

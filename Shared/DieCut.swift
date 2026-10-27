@@ -19,8 +19,17 @@ func sealMark(_ name: String) -> String {
     return String(first).uppercased()
 }
 
-func shouldPostSpendNotice(kind: String, existed: Bool, originLocal: Bool, noticesLive: Bool) -> Bool {
-    noticesLive && !existed && !originLocal && kind == "jar"
+/// A jar spend the other phone has not already shown. Edits count, including a past day. The first download and an unchanged echo do not.
+func shouldPostSpendNotice(kind: String, noticesLive: Bool, changed: Bool) -> Bool {
+    kind == "jar" && noticesLive && changed
+}
+
+func spendNoticeBody(amount: Int, note: String?, left: Int, removed: Bool = false) -> String {
+    if removed { return "Removed \(formatCents(amount))" }
+    let trimmed = note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let money = "\(formatCents(amount)) · \(formatCents(left)) left"
+    guard !trimmed.isEmpty else { return money }
+    return "\(formatCents(amount)) · \(trimmed) · \(formatCents(left)) left"
 }
 
 func sealShapeIndex(_ name: String) -> Int {

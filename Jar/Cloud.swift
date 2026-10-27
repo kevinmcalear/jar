@@ -350,9 +350,20 @@ extension AppModel {
         if let entry = snapshot.entries.first(where: { $0.id == name }) {
             let record = CKRecord(recordType: "Entry", recordID: id)
             record["day"] = entry.day as NSString
-            if let person = entry.personID { record["person"] = reference(person) }
+            if let personID = entry.personID {
+                record["person"] = reference(personID)
+                if let person = snapshot.people.first(where: { $0.id == personID }) {
+                    record["personName"] = person.displayName as NSString
+                    record["personSticker"] = person.sticker as NSString
+                }
+            }
             record["kind"] = entry.kind as NSString
-            if let category = entry.categoryID { record["category"] = reference(category) }
+            if let categoryID = entry.categoryID {
+                record["category"] = reference(categoryID)
+                if let name = snapshot.categories.first(where: { $0.id == categoryID })?.name {
+                    record["categoryName"] = name as NSString
+                }
+            }
             if let chip = entry.chip { record["chip"] = chip as NSString }
             if let rhythm = entry.rhythm { record["rhythm"] = rhythm as NSString }
             record["createdAt"] = date(from: entry.createdAt) as NSDate?
@@ -421,6 +432,9 @@ extension AppModel {
 
     func applyDelete(name: String, type: String) {
         if type == "Entry", let entry = snapshot.entries.first(where: { $0.id == name }) {
+            if shouldPostSpendNotice(kind: entry.kind, noticesLive: noticesLive, changed: true) {
+                queueSpendNotice(personID: entry.personID, personName: nil, sticker: nil, categoryID: entry.categoryID, categoryName: nil, amount: entry.amount, day: entry.day, note: entry.note, photo: nil, removed: true)
+            }
             try? store?.deleteEntry(name)
             if entry.kind == "jar" {
                 try? store?.unsetSettled(from: entry.day)
@@ -630,12 +644,12 @@ extension AppModel {
         let name = record.recordID.recordName
         guard let amount = openCents(data(record, "amount"), name, "amount"), let day = string(record, "day") else { return }
         let remote = stamp(date(record, "updatedAt") ?? date(record, "createdAt") ?? Date())
-        if let local = snapshot.entries.first(where: { $0.id == name }), local.updatedAt > remote {
+        let local = snapshot.entries.first { $0.id == name }
+        if let local, local.updatedAt > remote {
             sync.enqueueSave(name)
             return
         }
-        let existed = snapshot.entries.contains { $0.id == name }
-        let origin = existed && (snapshot.entries.first { $0.id == name }?.originLocal == true)
+        if let local, local.updatedAt == remote { return }
         let note: String?
         if let key, let sealed = data(record, "note"), let plain = try? openField(sealed, record: name, field: "note", key: key) {
             note = String(data: plain, encoding: .utf8)
@@ -646,23 +660,34 @@ extension AppModel {
         if let asset = record["photo"] as? CKAsset, let url = asset.fileURL, let sealed = try? Data(contentsOf: url), let key {
             photo = try? openField(sealed, record: name, field: "photo", key: key)
         }
+        let personName = string(record, "personName")
+        let categoryName = string(record, "categoryName")
+        let changed = local == nil || local?.amount != amount || local?.day != day || (local?.note ?? "") != (note ?? "") || local?.photo != photo
         let entry = Entry(
             id: name, day: day, personID: referenceName(record, "person"), amount: amount, kind: string(record, "kind") ?? "jar",
             categoryID: referenceName(record, "category"), chip: string(record, "chip"), rhythm: string(record, "rhythm"), note: note,
-            photo: photo, createdAt: stamp(date(record, "createdAt") ?? Date()), updatedAt: remote, originLocal: origin
+            photo: photo, createdAt: stamp(date(record, "createdAt") ?? Date()), updatedAt: remote, originLocal: local?.originLocal == true
         )
         try? store?.insertEntry(entry)
         reload()
-        let created = date(from: entry.createdAt)?.timeIntervalSince1970 ?? 0
-        let live = noticesLive && created >= UserDefaults.standard.double(forKey: "jar.noticesLive")
-        guard shouldPostSpendNotice(kind: entry.kind, existed: existed, originLocal: entry.originLocal, noticesLive: live) else { return }
+        guard shouldPostSpendNotice(kind: entry.kind, noticesLive: noticesLive, changed: changed) else { return }
+        queueSpendNotice(personID: entry.personID, personName: personName, sticker: string(record, "personSticker"), categoryID: entry.categoryID, categoryName: categoryName, amount: amount, day: day, note: note, photo: photo, removed: false)
+    }
+
+    private func queueSpendNotice(personID: String?, personName: String?, sticker: String?, categoryID: String?, categoryName: String?, amount: Int, day: String, note: String?, photo: Data?, removed: Bool) {
+        let person = snapshot.people.first { $0.id == personID }
+        let category = snapshot.categories.first { $0.id == categoryID }
         let cap = snapshot.days.first { $0.date == day }?.cap ?? snapshot.settings?.usualCap ?? 0
         let spent = snapshot.entries.filter { $0.day == day && $0.kind == "jar" }.reduce(0) { $0 + $1.amount }
-        let person = snapshot.people.first { $0.id == entry.personID }
-        let category = snapshot.categories.first { $0.id == entry.categoryID }
         pendingNotices.append(SpendNotice(
-            person: person?.displayName ?? "Someone", sticker: person?.sticker ?? "kevin",
-            category: category?.name ?? "Something", amount: amount, left: max(0, cap - spent)
+            person: personName ?? person?.displayName ?? "Someone",
+            sticker: sticker ?? person?.sticker,
+            category: categoryName ?? category?.name ?? "Jar",
+            amount: amount,
+            left: max(0, cap - spent),
+            note: note,
+            photo: photo,
+            removed: removed
         ))
     }
 

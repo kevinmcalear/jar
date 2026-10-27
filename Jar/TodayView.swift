@@ -217,6 +217,12 @@ struct TodayView: View {
                     .font(.subheadline)
                     .foregroundStyle(Flare.muted)
                     .lineLimit(1)
+                if let note = entry.note, !note.isEmpty {
+                    Text(note)
+                        .font(.caption)
+                        .foregroundStyle(Flare.muted)
+                        .lineLimit(2)
+                }
             }
             Spacer(minLength: 8)
             if let photo = entry.photo { PurchaseSticker(data: photo) }
