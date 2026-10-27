@@ -1,3 +1,4 @@
+import CloudKit
 import SwiftUI
 import UIKit
 
@@ -357,7 +358,7 @@ struct SettingsSheet: View {
         do {
             presentLink(try await model.sync.inviteLink())
         } catch {
-            model.shareError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            model.shareError = inviteFailureText(error)
         }
     }
 
@@ -538,6 +539,26 @@ struct CameraPicker: UIViewControllerRepresentable {
             picker.dismiss(animated: true)
         }
     }
+}
+
+private func inviteFailureText(_ error: Error) -> String {
+    if let invite = error as? InviteShareError, let text = invite.errorDescription { return text }
+    let raw = error.localizedDescription
+    if raw.contains("production schema") { return "iCloud is not ready for invites yet." }
+    if let ck = error as? CKError {
+        switch ck.code {
+        case .notAuthenticated:
+            return "Sign in to iCloud to invite the other phone."
+        case .networkUnavailable, .networkFailure, .serviceUnavailable, .requestRateLimited, .zoneBusy:
+            return "iCloud is temporarily unavailable. Try again."
+        default:
+            return "iCloud could not make the invite link."
+        }
+    }
+    if raw.contains("CKRecordID") || raw.hasPrefix("Error saving record") {
+        return "iCloud could not make the invite link."
+    }
+    return raw
 }
 
 private func jpegData(_ image: UIImage) -> Data? {
