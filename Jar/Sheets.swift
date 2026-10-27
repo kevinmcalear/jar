@@ -59,17 +59,23 @@ struct AddSheet: View {
     private var categoryStep: some View {
         VStack(spacing: 16) {
             ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 12)], spacing: 12) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 12)], spacing: 12) {
                     ForEach(model.snapshot.categories.filter(\.enabled)) { category in
                         Button {
                             categoryID = category.id
                             if let next = nextJarStep(.category, tookPhoto: false) { step = next }
                         } label: {
-                            CategoryMark(builtIn: category.builtIn, name: category.name, size: 56)
-                                .frame(maxWidth: .infinity, minHeight: 76)
+                            VStack(spacing: 6) {
+                                CategoryMark(builtIn: category.builtIn, name: category.name, size: 56)
+                                Text(category.name)
+                                    .font(.caption)
+                                    .foregroundStyle(Flare.paper)
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(2)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 96)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(category.name)
                     }
                 }
             }
