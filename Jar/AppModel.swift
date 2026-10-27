@@ -106,10 +106,43 @@ final class AppModel {
             snapshot = try store.load()
             sync.model = self
             sync.directory = store.directory
+            if snapshot.settings != nil { alignCategories() }
         } catch {
             loadError = error.localizedDescription
         }
         booted = true
+    }
+
+    private func alignCategories() {
+        guard let store else { return }
+        let now = stamp()
+        var changed = false
+        for (index, item) in builtInCategories.enumerated() {
+            if var category = snapshot.categories.first(where: { $0.builtIn == item.key }) {
+                guard category.sort != index else { continue }
+                category.sort = index
+                category.updatedAt = now
+                try? store.insertCategory(category)
+                sync.enqueueSave(category.id)
+                changed = true
+            } else {
+                let category = JarCategory(id: UUID().uuidString, name: item.name, enabled: true, builtIn: item.key, sort: index, updatedAt: now)
+                try? store.insertCategory(category)
+                sync.enqueueSave(category.id)
+                changed = true
+            }
+        }
+        let customs = snapshot.categories.filter { $0.builtIn == nil }.sorted { $0.sort < $1.sort }
+        for (offset, var category) in customs.enumerated() {
+            let sort = builtInCategories.count + offset
+            guard category.sort != sort else { continue }
+            category.sort = sort
+            category.updatedAt = now
+            try? store.insertCategory(category)
+            sync.enqueueSave(category.id)
+            changed = true
+        }
+        if changed { reload() }
     }
 
     func wake() async {

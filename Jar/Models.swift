@@ -96,16 +96,18 @@ enum Picture: Equatable {
 }
 
 let builtInCategories: [(key: String, name: String)] = [
-    ("cocktails", "Cocktails"),
-    ("blowdry", "Blow-dries"),
-    ("eating", "Eating out"),
-    ("snacks", "Snacks"),
-    ("delivery", "Delivery"),
     ("worklunch", "Work lunch"),
+    ("cocktails", "Cocktails"),
+    ("coffee", "Coffee"),
     ("date", "Date"),
     ("friends", "Friends"),
     ("wine", "Wine"),
-    ("coffee", "Coffee"),
+    ("eating", "Eating out"),
+    ("delivery", "Delivery"),
+    ("snacks", "Snacks"),
+    ("blowdry", "Blow-dries"),
+    ("activity", "Activity"),
+    ("clothes", "Clothes"),
 ]
 
 func stamp(_ date: Date = Date()) -> String {
