@@ -123,6 +123,22 @@ final class Store {
         try run("DELETE FROM entries WHERE id = ?", [.text(id)])
     }
 
+    func deleteCategory(_ id: String) throws {
+        try run("DELETE FROM categories WHERE id = ?", [.text(id)])
+    }
+
+    func retargetCategory(from: String, to: String, updatedAt: String) throws {
+        try run("UPDATE entries SET category_id = ?, updated_at = ? WHERE category_id = ?", [.text(to), .text(updatedAt), .text(from)])
+    }
+
+    func deletePerson(_ id: String) throws {
+        try run("DELETE FROM people WHERE id = ?", [.text(id)])
+    }
+
+    func retargetPerson(from: String, to: String, updatedAt: String) throws {
+        try run("UPDATE entries SET person_id = ?, updated_at = ? WHERE person_id = ?", [.text(to), .text(updatedAt), .text(from)])
+    }
+
     func insertMoney(_ table: String, _ row: MoneyRow) throws {
         guard table == "income" || table == "bills" else { return }
         try run(

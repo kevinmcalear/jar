@@ -113,7 +113,10 @@ final class AppModel {
             sync.model = self
             sync.directory = store.directory
             loadWaiting()
-            if snapshot.settings != nil { alignCategories() }
+            if snapshot.settings != nil {
+                collapseHouseholdCopies()
+                alignCategories()
+            }
         } catch {
             loadError = error.localizedDescription
         }
@@ -130,6 +133,57 @@ final class AppModel {
         addDay = day
         if day == nil { tab = "today" }
         addToken = SheetToken()
+    }
+
+    /// Joining kept this phone's setup and also downloaded the household's, so built-ins showed twice.
+    func collapseHouseholdCopies() {
+        guard let store else { return }
+        let now = stamp()
+        var changed = false
+        for key in Set(snapshot.categories.compactMap(\.builtIn)) {
+            let rows = snapshot.categories.filter { $0.builtIn == key }
+            guard rows.count > 1, let keep = keptDuplicate(rows.map { row in
+                DuplicateRow(id: row.id, updatedAt: row.updatedAt, uses: snapshot.entries.filter { $0.categoryID == row.id }.count)
+            }) else { continue }
+            for extra in rows where extra.id != keep {
+                let moved = snapshot.entries.filter { $0.categoryID == extra.id }.map(\.id)
+                do {
+                    try store.retargetCategory(from: extra.id, to: keep, updatedAt: now)
+                    try store.deleteCategory(extra.id)
+                } catch { continue }
+                moved.forEach { sync.enqueueSave($0) }
+                sync.enqueueSave(keep)
+                sync.enqueueDelete(extra.id)
+                changed = true
+            }
+        }
+        for sticker in ["kevin", "bridget"] {
+            let rows = snapshot.people.filter { $0.sticker == sticker }
+            guard rows.count > 1, let keep = keptDuplicate(rows.map { row in
+                DuplicateRow(id: row.id, updatedAt: "", uses: snapshot.entries.filter { $0.personID == row.id }.count)
+            }) else { continue }
+            for extra in rows where extra.id != keep {
+                let moved = snapshot.entries.filter { $0.personID == extra.id }.map(\.id)
+                do {
+                    try store.retargetPerson(from: extra.id, to: keep, updatedAt: now)
+                    try store.deletePerson(extra.id)
+                } catch { continue }
+                if var settings = snapshot.settings {
+                    var settingsChanged = false
+                    if settings.holderID == extra.id { settings.holderID = keep; settingsChanged = true }
+                    if settings.usualCapSetBy == extra.id { settings.usualCapSetBy = keep; settingsChanged = true }
+                    if settingsChanged {
+                        try? store.insertSettings(settings)
+                        snapshot.settings = settings
+                    }
+                }
+                moved.forEach { sync.enqueueSave($0) }
+                sync.enqueueSave(keep)
+                sync.enqueueDelete(extra.id)
+                changed = true
+            }
+        }
+        if changed { reload() }
     }
 
     private func alignCategories() {

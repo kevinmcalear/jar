@@ -142,6 +142,25 @@ check(canEditJarDay("2026-10-26", open: "2026-10-27"), "yesterday can change")
 check(canEditJarDay("2026-10-20", open: "2026-10-27"), "an older day can change")
 check(canEditJarDay("2026-10-27", open: "2026-10-27"), "today can change")
 check(!canEditJarDay("2026-10-28", open: "2026-10-27"), "tomorrow stays put")
+let coffee = [
+    DuplicateRow(id: "hers", updatedAt: "2026-10-27T12:00:00.000Z", uses: 0),
+    DuplicateRow(id: "his", updatedAt: "2026-10-26T12:00:00.000Z", uses: 2),
+]
+check(keptDuplicate(coffee) == "his", "keep the category spends use")
+check(keptDuplicate([
+    DuplicateRow(id: "older-empty", updatedAt: "2026-10-20T12:00:00.000Z", uses: 0),
+    DuplicateRow(id: "newer-used", updatedAt: "2026-10-27T12:00:00.000Z", uses: 3),
+]) == "newer-used", "spends beat an older empty copy")
+check(keptDuplicate([
+    DuplicateRow(id: "later", updatedAt: "2026-10-27T12:00:00.000Z", uses: 0),
+    DuplicateRow(id: "earlier", updatedAt: "2026-10-26T12:00:00.000Z", uses: 0),
+]) == "earlier", "unused tie keeps the older copy")
+check(keptDuplicate([
+    DuplicateRow(id: "b", updatedAt: "", uses: 0),
+    DuplicateRow(id: "a", updatedAt: "", uses: 0),
+]) == "a", "equal people keep the smaller id")
+check(keptDuplicate([DuplicateRow(id: "only", updatedAt: "2026-10-26T12:00:00.000Z", uses: 1)]) == "only", "one copy stays")
+check(keptDuplicate([]) == nil, "nothing to keep")
 check(snacks.jar == 4400 && snacks.debt == 0, "projected bank")
 check(replay([]).jar == 0 && replay([]).debt == 0, "open day stays unsettled")
 

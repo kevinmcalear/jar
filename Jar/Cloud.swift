@@ -85,6 +85,7 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
             UserDefaults.standard.set(false, forKey: "jar.resync")
             resetSync()
         }
+        model?.collapseHouseholdCopies()
         model?.republishIfNeeded()
     }
 
@@ -432,6 +433,26 @@ extension AppModel {
             reload()
         } else if type == "Bill" {
             try? store?.deleteMoney("bills", name)
+            reload()
+        } else if type == "Category" {
+            if let builtIn = snapshot.categories.first(where: { $0.id == name })?.builtIn,
+               let keep = snapshot.categories.first(where: { $0.id != name && $0.builtIn == builtIn })?.id {
+                try? store?.retargetCategory(from: name, to: keep, updatedAt: stamp())
+            }
+            try? store?.deleteCategory(name)
+            reload()
+        } else if type == "Person" {
+            let sticker = snapshot.people.first { $0.id == name }?.sticker
+            if let sticker, let keep = snapshot.people.first(where: { $0.id != name && $0.sticker == sticker })?.id {
+                try? store?.retargetPerson(from: name, to: keep, updatedAt: stamp())
+                if var settings = snapshot.settings {
+                    var settingsChanged = false
+                    if settings.holderID == name { settings.holderID = keep; settingsChanged = true }
+                    if settings.usualCapSetBy == name { settings.usualCapSetBy = keep; settingsChanged = true }
+                    if settingsChanged { try? store?.insertSettings(settings) }
+                }
+            }
+            try? store?.deletePerson(name)
             reload()
         }
     }

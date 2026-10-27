@@ -70,6 +70,22 @@ func canEditJarDay(_ day: String, open: String) -> Bool {
     day <= open
 }
 
+struct DuplicateRow: Equatable {
+    var id: String
+    var updatedAt: String
+    var uses: Int
+}
+
+/// One row per built-in. The copy spends already point at wins. A tie keeps the older row, then the smaller id.
+func keptDuplicate(_ rows: [DuplicateRow]) -> String? {
+    guard !rows.isEmpty else { return nil }
+    return rows.max { a, b in
+        if a.uses != b.uses { return a.uses < b.uses }
+        if a.updatedAt != b.updatedAt { return a.updatedAt > b.updatedAt }
+        return a.id > b.id
+    }?.id
+}
+
 func isCloudKitShareURL(_ url: URL) -> Bool {
     guard url.scheme?.lowercased() == "https", let host = url.host?.lowercased() else { return false }
     let shareHost = host == "www.icloud.com" || host == "icloud.com" || host == "share.icloud.com"
