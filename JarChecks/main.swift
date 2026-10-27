@@ -138,6 +138,10 @@ check(!isCloudKitShareURL(URL(string: "https://www.icloud.com/notes/")!), "other
 check(shouldPromptToUnlock(passphraseReset: false, hasKey: false), "face id when the key is missing")
 check(!shouldPromptToUnlock(passphraseReset: true, hasKey: false), "passphrase instead of a face id loop")
 check(!shouldPromptToUnlock(passphraseReset: false, hasKey: true), "loaded key skips face id")
+check(canEditJarDay("2026-10-26", open: "2026-10-27"), "yesterday can change")
+check(canEditJarDay("2026-10-20", open: "2026-10-27"), "an older day can change")
+check(canEditJarDay("2026-10-27", open: "2026-10-27"), "today can change")
+check(!canEditJarDay("2026-10-28", open: "2026-10-27"), "tomorrow stays put")
 check(snacks.jar == 4400 && snacks.debt == 0, "projected bank")
 check(replay([]).jar == 0 && replay([]).debt == 0, "open day stays unsettled")
 

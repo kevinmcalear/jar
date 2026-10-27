@@ -76,7 +76,7 @@ struct MonthView: View {
                 Spacer()
                 heads(jarEntries)
             }
-            if !jarEntries.isEmpty {
+            if days.contains(where: { canEditJarDay($0, open: model.openDate) }) || !jarEntries.isEmpty {
                 HStack {
                     ForEach(days, id: \.self) { day in
                         dayCell(day, entries: jarEntries.filter { $0.day == day })
@@ -115,7 +115,7 @@ struct MonthView: View {
         let leader = leaderID(entries)
         let person = model.snapshot.people.first { $0.id == leader }
         return Button {
-            guard !entries.isEmpty else { return }
+            guard canEditJarDay(day, open: model.openDate) else { return }
             openDate = openDate == day ? nil : day
         } label: {
             VStack(spacing: 4) {
@@ -131,8 +131,8 @@ struct MonthView: View {
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
-        .disabled(entries.isEmpty)
-        .accessibilityLabel(person == nil ? letter(day) : "\(letter(day)), \(person?.displayName ?? "") spent more")
+        .disabled(!canEditJarDay(day, open: model.openDate))
+        .accessibilityLabel(person == nil ? "\(letter(day)), nothing logged" : "\(letter(day)), \(person?.displayName ?? "") spent more")
     }
 
     private func dayDetail(_ day: String) -> some View {
@@ -154,6 +154,21 @@ struct MonthView: View {
                     if let photo = entry.photo { PurchaseSticker(data: photo, side: 40) }
                     Text(formatCents(entry.amount)).foregroundStyle(Flare.paper).lineLimit(1).layoutPriority(1)
                 }
+                .contextMenu {
+                    Button("Change amount") { model.editEntryID = entry.id }
+                    Button("Delete", role: .destructive) { model.deleteEntry(entry.id) }
+                }
+                .swipeActions {
+                    Button("Delete", role: .destructive) { model.deleteEntry(entry.id) }
+                }
+            }
+            if jar.isEmpty {
+                Text("Nothing logged").font(.subheadline).foregroundStyle(Flare.muted)
+            }
+            if canEditJarDay(day, open: model.openDate) {
+                Button("Add something") { model.openAdd(on: day) }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Flare.paper)
             }
             ForEach(outside) { entry in
                 HStack {

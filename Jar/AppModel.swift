@@ -27,6 +27,7 @@ final class AppModel {
     var morningNote: String?
     var shove: ShoveShow?
     var addToken: SheetToken?
+    var addDay: String?
     var pendingAdd = false
     var outsideToken: SheetToken?
     var settingsToken: SheetToken?
@@ -120,13 +121,14 @@ final class AppModel {
         publishPile()
     }
 
-    func openAdd() {
+    func openAdd(on day: String? = nil) {
         guard unlocked, snapshot.settings != nil else {
             pendingAdd = true
             return
         }
         pendingAdd = false
-        tab = "today"
+        addDay = day
+        if day == nil { tab = "today" }
         addToken = SheetToken()
     }
 
@@ -322,8 +324,8 @@ final class AppModel {
     func logJar(amount: Int, categoryID: String, photo: Data?, day: String? = nil) {
         guard let store, amount > 0, let holder = snapshot.settings?.holderID else { return }
         let target = day ?? openDate
+        guard canEditJarDay(target, open: openDate) else { return }
         if target != openDate {
-            guard target == addDays(openDate, -1, timeZone: timeZone) else { return }
             shove = nil
             try? store.unsetSettled(from: target)
             try? store.clearPourSeen(from: target)
@@ -486,8 +488,7 @@ final class AppModel {
 
     private func canChange(_ entry: Entry) -> Bool {
         if entry.kind == "outside" { return true }
-        if entry.day == openDate { return true }
-        return entry.day == addDays(openDate, -1, timeZone: timeZone) && yesterdayToken != nil
+        return canEditJarDay(entry.day, open: openDate)
     }
 
     private func publishEverything() {

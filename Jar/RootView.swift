@@ -76,7 +76,7 @@ struct RootView: View {
                 ShoveView(shove: shove)
             }
         }
-        .sheet(item: $model.addToken) { _ in AddSheet() }
+        .sheet(item: $model.addToken, onDismiss: { model.addDay = nil }) { _ in AddSheet() }
         .sheet(item: $model.outsideToken) { _ in OutsideSheet() }
         .sheet(item: $model.settingsToken) { _ in SettingsSheet() }
         .sheet(item: $model.yesterdayToken) { _ in YesterdaySheet() }

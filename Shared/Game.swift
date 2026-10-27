@@ -66,6 +66,10 @@ func shouldPromptToUnlock(passphraseReset: Bool, hasKey: Bool) -> Bool {
     !passphraseReset && !hasKey
 }
 
+func canEditJarDay(_ day: String, open: String) -> Bool {
+    day <= open
+}
+
 func isCloudKitShareURL(_ url: URL) -> Bool {
     guard url.scheme?.lowercased() == "https", let host = url.host?.lowercased() else { return false }
     let shareHost = host == "www.icloud.com" || host == "icloud.com" || host == "share.icloud.com"

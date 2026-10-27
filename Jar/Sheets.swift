@@ -188,7 +188,7 @@ struct AddSheet: View {
     private func finish(photo: Data?) {
         guard let categoryID, cents(typed: typed) > 0, !saving else { return }
         saving = true
-        model.logJar(amount: cents(typed: typed), categoryID: categoryID, photo: photo)
+        model.logJar(amount: cents(typed: typed), categoryID: categoryID, photo: photo, day: model.addDay)
         dismiss()
     }
 }
