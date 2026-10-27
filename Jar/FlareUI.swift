@@ -101,19 +101,17 @@ struct BillPile: View {
     private func row(_ bills: [BillFace]) -> some View {
         HStack(spacing: 8) {
             ForEach(Array(bills.enumerated()), id: \.offset) { index, bill in
-                Text(face(bill.cents))
+                Text(formatCents(bill.cents))
                     .font(Flare.number(bill.full ? 28 : 22))
                     .foregroundStyle(Flare.flare)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                     .frame(width: bill.full ? 72 : max(46, 72 * CGFloat(bill.cents) / 1000), height: 48)
                     .background(Flare.ground, in: RoundedRectangle(cornerRadius: 8))
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Flare.paper, lineWidth: 2))
                     .rotationEffect(.degrees(Double(index) * 4 - 6))
             }
         }
-    }
-
-    private func face(_ cents: Int) -> String {
-        cents.isMultiple(of: 100) ? String(cents / 100) : formatCents(cents).replacingOccurrences(of: "$", with: "")
     }
 
     private func label(_ bills: [BillFace]) -> String {
