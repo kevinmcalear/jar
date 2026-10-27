@@ -200,9 +200,11 @@ final class AppModel {
 
     /// A dropped relink.json maps a deleted duplicate id back to the copy that is still here.
     func applyRelink() {
-        guard let store, let directory = sync.directory else { return }
-        let url = directory.appendingPathComponent("relink.json")
-        guard let data = try? Data(contentsOf: url),
+        guard let store else { return }
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("relink.json")
+        let support = sync.directory?.appendingPathComponent("relink.json")
+        guard let url = [support, docs].compactMap({ $0 }).first(where: { FileManager.default.fileExists(atPath: $0.path) }),
+              let data = try? Data(contentsOf: url),
               let map = try? JSONDecoder().decode([String: String].self, from: data) else { return }
         let now = stamp()
         var moved: [String] = []
