@@ -400,6 +400,12 @@ func resolvedCategoryID(categories: [(id: String, name: String)], reference: Str
     return reference
 }
 
+/// The other phone may still point this spend at a person or category this phone deleted. Keep the face already on the row until the name resolves to one that is still here.
+func adoptedFaceID(resolved: String?, living: [String], current: String?) -> String? {
+    guard let resolved, living.contains(resolved) else { return current }
+    return resolved
+}
+
 /// A household zone in the shared database means this phone joined someone else's jar.
 /// An empty lookup keeps the current role: a failed fetch must not turn a participant back into an owner.
 func adoptSharedZone(isOwner: Bool, zoneOwner: String?, sharedZoneOwners: [String]) -> (isOwner: Bool, zoneOwner: String?) {

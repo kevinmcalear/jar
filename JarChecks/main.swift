@@ -139,6 +139,10 @@ check(resolvedPersonID(people: household, reference: "kevin", name: "Bridget", s
 let lunch = [(id: "lunch", name: "Work lunch"), (id: "gifts", name: "Gifts")]
 check(resolvedCategoryID(categories: lunch, reference: "missing", name: "Work lunch") == "lunch", "a missing category id uses its name")
 check(resolvedCategoryID(categories: lunch, reference: "gifts", name: "Work lunch") == "gifts", "a real category id stays")
+check(adoptedFaceID(resolved: "missing", living: ["bridget"], current: "bridget") == "bridget", "a deleted person id does not wipe her off the row")
+check(adoptedFaceID(resolved: "bridget", living: ["bridget", "kevin"], current: "missing") == "bridget", "her name fills the row")
+check(adoptedFaceID(resolved: nil, living: ["bridget"], current: "bridget") == "bridget", "no name keeps the row")
+check(adoptedFaceID(resolved: "missing", living: ["bridget"], current: "missing") == "missing", "a new spend keeps the id it arrived with")
 check(!entryRetry(problem: .missingReference, attempt: 1, alreadyDroppedReferences: true).retry, "a bare spend is not retried forever")
 check(!entryRetry(problem: .batch, attempt: 2, alreadyDroppedReferences: false).retry, "give up after two failures")
 

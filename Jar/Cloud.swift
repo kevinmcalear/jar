@@ -774,8 +774,8 @@ extension AppModel {
     private func healSpendFace(_ entry: Entry, record: CKRecord) {
         let people = snapshot.people.map { (id: $0.id, name: $0.displayName, sticker: $0.sticker) }
         let categories = snapshot.categories.map { (id: $0.id, name: $0.name) }
-        let personID = resolvedPersonID(people: people, reference: referenceName(record, "person"), name: string(record, "personName"), sticker: string(record, "personSticker"))
-        let categoryID = resolvedCategoryID(categories: categories, reference: referenceName(record, "category"), name: string(record, "categoryName"))
+        let personID = adoptedFaceID(resolved: resolvedPersonID(people: people, reference: referenceName(record, "person"), name: string(record, "personName"), sticker: string(record, "personSticker")), living: people.map(\.id), current: entry.personID)
+        let categoryID = adoptedFaceID(resolved: resolvedCategoryID(categories: categories, reference: referenceName(record, "category"), name: string(record, "categoryName")), living: categories.map(\.id), current: entry.categoryID)
         guard personID != entry.personID || categoryID != entry.categoryID else { return }
         var fixed = entry
         fixed.personID = personID
@@ -812,11 +812,13 @@ extension AppModel {
         let changed = local == nil || local?.amount != amount || local?.day != day || (local?.note ?? "") != (note ?? "") || local?.photo != photo
         let people = snapshot.people.map { (id: $0.id, name: $0.displayName, sticker: $0.sticker) }
         let categories = snapshot.categories.map { (id: $0.id, name: $0.name) }
+        let resolvedPerson = resolvedPersonID(people: people, reference: referenceName(record, "person"), name: personName, sticker: string(record, "personSticker"))
+        let resolvedCategory = resolvedCategoryID(categories: categories, reference: referenceName(record, "category"), name: categoryName)
         let entry = Entry(
             id: name, day: day,
-            personID: resolvedPersonID(people: people, reference: referenceName(record, "person"), name: personName, sticker: string(record, "personSticker")),
+            personID: adoptedFaceID(resolved: resolvedPerson, living: people.map(\.id), current: local?.personID ?? resolvedPerson),
             amount: amount, kind: string(record, "kind") ?? "jar",
-            categoryID: resolvedCategoryID(categories: categories, reference: referenceName(record, "category"), name: categoryName),
+            categoryID: adoptedFaceID(resolved: resolvedCategory, living: categories.map(\.id), current: local?.categoryID ?? resolvedCategory),
             chip: string(record, "chip"), rhythm: string(record, "rhythm"), note: note,
             photo: photo, createdAt: stamp(date(record, "createdAt") ?? Date()), updatedAt: remote, originLocal: local?.originLocal == true
         )
