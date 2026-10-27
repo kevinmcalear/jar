@@ -102,6 +102,7 @@ let builtInCategories: [(key: String, name: String)] = [
     ("date", "Date"),
     ("friends", "Friends"),
     ("wine", "Wine"),
+    ("gifts", "Gifts"),
     ("eating", "Eating out"),
     ("delivery", "Delivery"),
     ("snacks", "Snacks"),
