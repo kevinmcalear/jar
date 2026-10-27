@@ -366,18 +366,38 @@ enum EntrySaveProblem: Equatable {
 struct EntryRetry: Equatable {
     var retry: Bool
     var dropReferences: Bool
+    var dropNames: Bool
 }
 
-/// A rejected upload has to be sent again. A conflict means the server already has the record. A dangling person or category is dropped once so the spend itself still uploads.
+/// A rejected upload has to be sent again. A conflict means the server already has the record. A dangling person or category is dropped once so the spend itself still uploads. A schema rejection is sent again without the name fields.
 func entryRetry(problem: EntrySaveProblem, attempt: Int, alreadyDroppedReferences: Bool) -> EntryRetry {
     switch problem {
     case .conflict:
-        return EntryRetry(retry: false, dropReferences: false)
+        return EntryRetry(retry: false, dropReferences: false, dropNames: false)
     case .missingReference:
-        return EntryRetry(retry: attempt < 2 && !alreadyDroppedReferences, dropReferences: true)
-    case .schema, .batch, .other:
-        return EntryRetry(retry: attempt < 2, dropReferences: alreadyDroppedReferences)
+        return EntryRetry(retry: attempt < 2 && !alreadyDroppedReferences, dropReferences: true, dropNames: false)
+    case .schema:
+        return EntryRetry(retry: attempt < 2, dropReferences: alreadyDroppedReferences, dropNames: true)
+    case .batch, .other:
+        return EntryRetry(retry: attempt < 2, dropReferences: alreadyDroppedReferences, dropNames: false)
     }
+}
+
+/// The other phone may have deleted the duplicate person this spend points at. The sticker, then the name, picks the one still here.
+func resolvedPersonID(people: [(id: String, name: String, sticker: String)], reference: String?, name: String?, sticker: String?) -> String? {
+    if let reference, people.contains(where: { $0.id == reference }) { return reference }
+    if let sticker, let match = people.first(where: { $0.sticker == sticker }) { return match.id }
+    let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    if !trimmed.isEmpty, let match = people.first(where: { $0.name == trimmed }) { return match.id }
+    return reference
+}
+
+/// Same for a category the other phone collapsed away. The name picks the one still here.
+func resolvedCategoryID(categories: [(id: String, name: String)], reference: String?, name: String?) -> String? {
+    if let reference, categories.contains(where: { $0.id == reference }) { return reference }
+    let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    if !trimmed.isEmpty, let match = categories.first(where: { $0.name == trimmed }) { return match.id }
+    return reference
 }
 
 /// A household zone in the shared database means this phone joined someone else's jar.

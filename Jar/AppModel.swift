@@ -38,6 +38,7 @@ final class AppModel {
     var pendingNotices: [SpendNotice] = []
     @ObservationIgnored var saveAttempts: [String: Int] = [:]
     @ObservationIgnored var systemFields: [String: Data] = [:]
+    @ObservationIgnored var omitEntryNames = false
     var key: SymmetricKey?
     var waiting: [CKRecord] = []
     let sync = HouseholdSync()

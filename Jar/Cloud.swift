@@ -107,7 +107,7 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
         model?.healLostFaces()
         model?.publishRoster()
         model?.republishIfNeeded()
-        if model?.repushLocalEntries() == true {
+        if model?.repushLocalEntries() == true || model?.repushNamedEntries() == true {
             try? await writer?.sendChanges()
         }
     }
@@ -248,7 +248,12 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
             }
             await model?.flushNotices()
         case .sentRecordZoneChanges(let sent):
-            for record in sent.savedRecords { model?.rememberSystemFields(record) }
+            for record in sent.savedRecords {
+                model?.rememberSystemFields(record)
+                if record["personName"] != nil || record["categoryName"] != nil {
+                    UserDefaults.standard.set(true, forKey: "jar.namesOnServer")
+                }
+            }
             for failure in sent.failedRecordSaves {
                 let name = failure.record.recordID.recordName
                 if let server = failure.error.serverRecord {
@@ -266,6 +271,7 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
                 let decision = entryRetry(problem: problem, attempt: attempt, alreadyDroppedReferences: dropped)
                 model?.saveAttempts[name] = attempt + 1
                 if decision.dropReferences { model?.markBareEntry(name) }
+                if decision.dropNames { model?.omitEntryNames = true }
                 if decision.retry { model?.sync.enqueueSave(name) }
             }
             for (id, error) in sent.failedRecordDeletes {
@@ -361,6 +367,14 @@ extension AppModel {
         return !mine.isEmpty
     }
 
+    /// Keep offering the name fields until production accepts one. A rejection retries that launch without them, so the spend still syncs.
+    func repushNamedEntries() -> Bool {
+        guard !UserDefaults.standard.bool(forKey: "jar.namesOnServer") else { return false }
+        let mine = snapshot.entries.filter(\.originLocal)
+        mine.forEach { sync.enqueueSave($0.id) }
+        return !mine.isEmpty
+    }
+
     func markBareEntry(_ name: String) {
         var bare = bareEntryIDs
         bare.insert(name)
@@ -442,16 +456,22 @@ extension AppModel {
         if let entry = snapshot.entries.first(where: { $0.id == name }) {
             let record = cloudRecord(type: "Entry", name: name)
             record["day"] = entry.day as NSString
-            // ponytail: personName, personSticker, and categoryName are not in the production schema. Sending them makes CloudKit reject the whole spend, so the other phone never sees it and never gets a push. The notice uses the person and category records. Add the name fields back after a schema deploy.
             let bare = bareEntryIDs.contains(name)
             if let personID = entry.personID, !bare {
                 record["person"] = reference(personID)
+                if !omitEntryNames, let person = snapshot.people.first(where: { $0.id == personID }) {
+                    record["personName"] = person.displayName as NSString
+                    record["personSticker"] = person.sticker as NSString
+                }
             } else if bare {
                 record["person"] = nil
             }
             record["kind"] = entry.kind as NSString
             if let categoryID = entry.categoryID, !bare {
                 record["category"] = reference(categoryID)
+                if !omitEntryNames, let categoryName = snapshot.categories.first(where: { $0.id == categoryID })?.name {
+                    record["categoryName"] = categoryName as NSString
+                }
             } else if bare {
                 record["category"] = nil
             }
@@ -751,6 +771,19 @@ extension AppModel {
         try? store?.insertSettings(settings)
     }
 
+    private func healSpendFace(_ entry: Entry, record: CKRecord) {
+        let people = snapshot.people.map { (id: $0.id, name: $0.displayName, sticker: $0.sticker) }
+        let categories = snapshot.categories.map { (id: $0.id, name: $0.name) }
+        let personID = resolvedPersonID(people: people, reference: referenceName(record, "person"), name: string(record, "personName"), sticker: string(record, "personSticker"))
+        let categoryID = resolvedCategoryID(categories: categories, reference: referenceName(record, "category"), name: string(record, "categoryName"))
+        guard personID != entry.personID || categoryID != entry.categoryID else { return }
+        var fixed = entry
+        fixed.personID = personID
+        fixed.categoryID = categoryID
+        try? store?.insertEntry(fixed)
+        reload()
+    }
+
     private func applyEntry(_ record: CKRecord) {
         let name = record.recordID.recordName
         guard let amount = openCents(data(record, "amount"), name, "amount"), let day = string(record, "day") else { return }
@@ -760,7 +793,10 @@ extension AppModel {
             sync.enqueueSave(name)
             return
         }
-        if let local, local.updatedAt == remote { return }
+        if let local, local.updatedAt == remote {
+            healSpendFace(local, record: record)
+            return
+        }
         let note: String?
         if let key, let sealed = data(record, "note"), let plain = try? openField(sealed, record: name, field: "note", key: key) {
             note = String(data: plain, encoding: .utf8)
@@ -774,9 +810,14 @@ extension AppModel {
         let personName = string(record, "personName")
         let categoryName = string(record, "categoryName")
         let changed = local == nil || local?.amount != amount || local?.day != day || (local?.note ?? "") != (note ?? "") || local?.photo != photo
+        let people = snapshot.people.map { (id: $0.id, name: $0.displayName, sticker: $0.sticker) }
+        let categories = snapshot.categories.map { (id: $0.id, name: $0.name) }
         let entry = Entry(
-            id: name, day: day, personID: referenceName(record, "person"), amount: amount, kind: string(record, "kind") ?? "jar",
-            categoryID: referenceName(record, "category"), chip: string(record, "chip"), rhythm: string(record, "rhythm"), note: note,
+            id: name, day: day,
+            personID: resolvedPersonID(people: people, reference: referenceName(record, "person"), name: personName, sticker: string(record, "personSticker")),
+            amount: amount, kind: string(record, "kind") ?? "jar",
+            categoryID: resolvedCategoryID(categories: categories, reference: referenceName(record, "category"), name: categoryName),
+            chip: string(record, "chip"), rhythm: string(record, "rhythm"), note: note,
             photo: photo, createdAt: stamp(date(record, "createdAt") ?? Date()), updatedAt: remote, originLocal: local?.originLocal == true
         )
         try? store?.insertEntry(entry)

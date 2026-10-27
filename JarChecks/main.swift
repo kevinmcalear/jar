@@ -130,9 +130,15 @@ check(adoptSharedZone(isOwner: false, zoneOwner: "kevin", sharedZoneOwners: []).
 let joined = adoptSharedZone(isOwner: true, zoneOwner: nil, sharedZoneOwners: ["kevin"])
 check(!joined.isOwner && joined.zoneOwner == "kevin", "shared zone joins their jar")
 check(adoptSharedZone(isOwner: false, zoneOwner: "kevin", sharedZoneOwners: ["bridget", "kevin"]).zoneOwner == "kevin", "keeps the zone already joined")
-check(entryRetry(problem: .schema, attempt: 0, alreadyDroppedReferences: false).retry, "a rejected spend is sent again")
+check(entryRetry(problem: .schema, attempt: 0, alreadyDroppedReferences: false) == EntryRetry(retry: true, dropReferences: false, dropNames: true), "a schema rejection is sent again without the names")
 check(!entryRetry(problem: .conflict, attempt: 0, alreadyDroppedReferences: false).retry, "the server copy is already there")
-check(entryRetry(problem: .missingReference, attempt: 0, alreadyDroppedReferences: false) == EntryRetry(retry: true, dropReferences: true), "a missing person does not block the spend")
+check(entryRetry(problem: .missingReference, attempt: 0, alreadyDroppedReferences: false) == EntryRetry(retry: true, dropReferences: true, dropNames: false), "a missing person does not block the spend")
+let household = [(id: "kevin", name: "Kevin", sticker: "kevin"), (id: "bridget", name: "Bridget", sticker: "bridget")]
+check(resolvedPersonID(people: household, reference: "missing", name: "Bridget", sticker: "bridget") == "bridget", "a missing person id uses her sticker")
+check(resolvedPersonID(people: household, reference: "kevin", name: "Bridget", sticker: "bridget") == "kevin", "a real person id stays")
+let lunch = [(id: "lunch", name: "Work lunch"), (id: "gifts", name: "Gifts")]
+check(resolvedCategoryID(categories: lunch, reference: "missing", name: "Work lunch") == "lunch", "a missing category id uses its name")
+check(resolvedCategoryID(categories: lunch, reference: "gifts", name: "Work lunch") == "gifts", "a real category id stays")
 check(!entryRetry(problem: .missingReference, attempt: 1, alreadyDroppedReferences: true).retry, "a bare spend is not retried forever")
 check(!entryRetry(problem: .batch, attempt: 2, alreadyDroppedReferences: false).retry, "give up after two failures")
 
