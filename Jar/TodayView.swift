@@ -40,7 +40,7 @@ struct TodayView: View {
                 }
                 rows
                 Button { model.outsideToken = SheetToken() } label: {
-                    Text("Outside")
+                    Text("Log $ outside the jar")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Flare.paper)
                         .padding(.horizontal, 14)
@@ -48,7 +48,6 @@ struct TodayView: View {
                         .background(Flare.surface, in: Capsule())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Log outside the jar")
                 outside
                 if let note = model.morningNote {
                     Text(note)

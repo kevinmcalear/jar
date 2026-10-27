@@ -92,24 +92,23 @@ struct MonthView: View {
         .overlay(RoundedRectangle(cornerRadius: 18).stroke(jarEntries.isEmpty ? Flare.line : Flare.flare, lineWidth: jarEntries.isEmpty ? 1 : 1.5))
     }
 
-    private func heads(_ entries: [Entry]) -> some View {
+    @ViewBuilder private func heads(_ entries: [Entry]) -> some View {
         let sums = Dictionary(grouping: entries, by: \.personID).mapValues { $0.reduce(0) { $0 + $1.amount } }
         let ranked = sums.sorted { $0.value > $1.value }
-        guard let first = ranked.first, let person = model.snapshot.people.first(where: { $0.id == first.key }) else { return AnyView(EmptyView()) }
-        let second = ranked.dropFirst().first.flatMap { pair in model.snapshot.people.first { $0.id == pair.key } }
-        let tie = second != nil && ranked.dropFirst().first?.value == first.value
-        return AnyView(ZStack {
-            if let second, !tie {
-                PersonSticker(sticker: second.sticker, name: second.displayName, size: 48)
-                    .offset(x: -16, y: 8)
+        if let first = ranked.first, let person = model.snapshot.people.first(where: { $0.id == first.key }) {
+            let trailing = ranked.dropFirst().first
+            let second = trailing.flatMap { pair in model.snapshot.people.first { $0.id == pair.key } }
+            let tie = second != nil && trailing?.value == first.value
+            HStack(alignment: .bottom, spacing: 10) {
+                if let second, !tie {
+                    PersonSticker(sticker: second.sticker, name: second.displayName, size: 48)
+                }
+                PersonSticker(sticker: person.sticker, name: person.displayName, size: tie ? 64 : 76)
+                if tie, let second {
+                    PersonSticker(sticker: second.sticker, name: second.displayName, size: 64)
+                }
             }
-            PersonSticker(sticker: person.sticker, name: person.displayName, size: tie ? 64 : 76)
-                .offset(x: second == nil || tie ? 0 : 18)
-            if tie, let second {
-                PersonSticker(sticker: second.sticker, name: second.displayName, size: 64)
-                    .offset(x: 36)
-            }
-        }.frame(width: 120, height: 84))
+        }
     }
 
     private func dayCell(_ day: String, entries: [Entry]) -> some View {
