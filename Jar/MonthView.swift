@@ -18,7 +18,7 @@ struct MonthView: View {
         }
         .background(Flare.ground.ignoresSafeArea())
         .navigationTitle(title)
-        .navigationSubtitle("Weeks in this month")
+        .navigationSubtitle(monthSpentLine)
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -30,6 +30,15 @@ struct MonthView: View {
                     .accessibilityLabel("Next month")
             }
         }
+    }
+
+    private var monthSpentLine: String {
+        let parts = monthParts
+        let prefix = String(format: "%04d-%02d-", parts.year, parts.month)
+        let total = model.snapshot.entries.reduce(0) { sum, entry in
+            entry.kind == "jar" && entry.day.hasPrefix(prefix) ? sum + entry.amount : sum
+        }
+        return "\(formatCents(total)) spent"
     }
 
     private var title: String {
@@ -58,12 +67,18 @@ struct MonthView: View {
         let jarEntries = model.snapshot.entries.filter { $0.kind == "jar" && days.contains($0.day) }
         let outside = model.snapshot.entries.filter { $0.kind == "outside" && days.contains($0.day) }
         let outsideTotal = outside.reduce(0) { $0 + $1.amount }
+        let spent = jarEntries.reduce(0) { $0 + $1.amount }
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(rangeTitle(week))
                         .font(.headline)
                         .foregroundStyle(Flare.paper)
+                    if spent > 0 {
+                        Text("\(formatCents(spent)) spent")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Flare.paper)
+                    }
                     Text(jarNote(days: days, jarEntries: jarEntries))
                         .font(.subheadline)
                         .foregroundStyle(jarEntries.isEmpty ? Flare.muted : Flare.paper)
@@ -77,7 +92,7 @@ struct MonthView: View {
                 heads(jarEntries)
             }
             if days.contains(where: { canEditJarDay($0, open: model.openDate) }) || !jarEntries.isEmpty {
-                HStack {
+                HStack(alignment: .top) {
                     ForEach(days, id: \.self) { day in
                         dayCell(day, entries: jarEntries.filter { $0.day == day })
                     }
@@ -114,6 +129,7 @@ struct MonthView: View {
     private func dayCell(_ day: String, entries: [Entry]) -> some View {
         let leader = leaderID(entries)
         let person = model.snapshot.people.first { $0.id == leader }
+        let spent = entries.reduce(0) { $0 + $1.amount }
         return Button {
             guard canEditJarDay(day, open: model.openDate) else { return }
             openDate = openDate == day ? nil : day
@@ -127,19 +143,35 @@ struct MonthView: View {
                 } else {
                     Color.clear.frame(width: 28, height: 28)
                 }
+                if spent > 0 {
+                    Text(formatCents(spent))
+                        .font(.caption)
+                        .foregroundStyle(Flare.paper)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                }
             }
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
         .disabled(!canEditJarDay(day, open: model.openDate))
-        .accessibilityLabel(person == nil ? "\(letter(day)), nothing logged" : "\(letter(day)), \(person?.displayName ?? "") spent more")
+        .accessibilityLabel(spent > 0 ? "\(letter(day)), \(formatCents(spent)) spent" : "\(letter(day)), nothing logged")
     }
 
     private func dayDetail(_ day: String) -> some View {
         let jar = model.snapshot.entries.filter { $0.day == day && $0.kind == "jar" }
         let outside = model.snapshot.entries.filter { $0.day == day && $0.kind == "outside" }
+        let spent = jar.reduce(0) { $0 + $1.amount }
         return VStack(alignment: .leading, spacing: 8) {
-            Text(weekday(day)).font(.subheadline.weight(.semibold)).foregroundStyle(Flare.muted)
+            HStack {
+                Text(weekday(day)).font(.subheadline.weight(.semibold)).foregroundStyle(Flare.muted)
+                Spacer()
+                if spent > 0 {
+                    Text("\(formatCents(spent)) spent")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Flare.paper)
+                }
+            }
             ForEach(jar) { entry in
                 let person = model.snapshot.people.first { $0.id == entry.personID }
                 let category = model.snapshot.categories.first { $0.id == entry.categoryID }
