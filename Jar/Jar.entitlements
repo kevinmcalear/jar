@@ -7,7 +7,7 @@
 		<string>group.com.kevinmcalear.jar</string>
 	</array>
 	<key>aps-environment</key>
-	<string>development</string>
+	<string>$(APS_ENVIRONMENT)</string>
 	<key>com.apple.developer.icloud-container-identifiers</key>
 	<array>
 		<string>iCloud.com.kevinmcalear.jar</string>
