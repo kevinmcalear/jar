@@ -20,6 +20,10 @@ func sealMark(_ name: String) -> String {
     return String(first).uppercased()
 }
 
+func shouldPostSpendNotice(kind: String, existed: Bool, originLocal: Bool, noticesLive: Bool) -> Bool {
+    noticesLive && !existed && !originLocal && kind == "jar"
+}
+
 func sealShapeIndex(_ name: String) -> Int {
     let total = name.unicodeScalars.reduce(0) { $0 + Int($1.value) }
     return total % 3

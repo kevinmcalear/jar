@@ -29,14 +29,14 @@ struct RootView: View {
     private var main: some View {
         @Bindable var model = model
         return ZStack {
-            TabView {
-                Tab("Today", systemImage: "sun.max") {
+            TabView(selection: $model.tab) {
+                Tab("Today", systemImage: "sun.max", value: "today") {
                     NavigationStack { TodayView() }
                 }
-                Tab("Month", systemImage: "calendar") {
+                Tab("Month", systemImage: "calendar", value: "month") {
                     NavigationStack { MonthView() }
                 }
-                Tab("Year", systemImage: "clock") {
+                Tab("Year", systemImage: "clock", value: "year") {
                     NavigationStack { YearView() }
                 }
             }

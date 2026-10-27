@@ -58,7 +58,7 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
         }
     }
 
-    private func deliver(_ event: CKSyncEngine.Event, _ engine: CKSyncEngine) {
+    private func deliver(_ event: CKSyncEngine.Event, _ engine: CKSyncEngine) async {
         switch event {
         case .stateUpdate(let update):
             if let data = try? JSONEncoder().encode(update.stateSerialization) {
@@ -69,6 +69,7 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
             for deletion in changes.deletions {
                 model?.applyDelete(name: deletion.recordID.recordName, type: deletion.recordType)
             }
+            await model?.flushNotices()
         case .sentRecordZoneChanges(let sent):
             for failure in sent.failedRecordSaves {
                 if let server = failure.error.serverRecord { model?.apply(server) }
@@ -116,14 +117,15 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
     }
 
     private func installSubscriptions() async {
+        // Silent push only: content-available, no alert and no record fields. The amount stays ciphertext until this phone decrypts it.
         let info = CKSubscription.NotificationInfo()
         info.shouldSendContentAvailable = true
-        let query = CKQuerySubscription(recordType: "Entry", predicate: NSPredicate(value: true), subscriptionID: "jar-entry", options: [.firesOnRecordCreation, .firesOnRecordUpdate])
-        query.notificationInfo = info
-        let databaseSub = CKDatabaseSubscription(subscriptionID: "jar-database")
-        databaseSub.notificationInfo = info
+        info.shouldBadge = false
+        let subscription = CKDatabaseSubscription(subscriptionID: "jar-database")
+        subscription.notificationInfo = info
         for database in [container.privateCloudDatabase, container.sharedCloudDatabase] {
-            _ = try? await database.modifySubscriptions(saving: [databaseSub, query], deleting: [])
+            _ = try? await database.modifySubscriptions(saving: [subscription], deleting: [])
+            _ = try? await database.modifySubscriptions(saving: [], deleting: ["jar-entry"])
         }
     }
 }
@@ -314,14 +316,17 @@ extension AppModel {
         )
         try? store?.insertEntry(entry)
         reload()
-        guard !existed, entry.kind == "jar" else { return }
+        let created = date(from: entry.createdAt)?.timeIntervalSince1970 ?? 0
+        let live = noticesLive && created >= UserDefaults.standard.double(forKey: "jar.noticesLive")
+        guard shouldPostSpendNotice(kind: entry.kind, existed: existed, originLocal: entry.originLocal, noticesLive: live) else { return }
         let cap = snapshot.days.first { $0.date == day }?.cap ?? snapshot.settings?.usualCap ?? 0
         let spent = snapshot.entries.filter { $0.day == day && $0.kind == "jar" }.reduce(0) { $0 + $1.amount }
         let person = snapshot.people.first { $0.id == entry.personID }
         let category = snapshot.categories.first { $0.id == entry.categoryID }
-        Task {
-            await postSpendNotice(person: person?.displayName ?? "Someone", sticker: person?.sticker ?? "kevin", category: category?.name ?? "Something", amount: amount, left: max(0, cap - spent))
-        }
+        pendingNotices.append(SpendNotice(
+            person: person?.displayName ?? "Someone", sticker: person?.sticker ?? "kevin",
+            category: category?.name ?? "Something", amount: amount, left: max(0, cap - spent)
+        ))
     }
 
     private func sealCents(_ cents: Int, _ record: String, _ field: String) -> Data? {

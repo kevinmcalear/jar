@@ -28,6 +28,8 @@ final class AppModel {
     var shareToken: SheetToken?
     var yesterdayToken: SheetToken?
     var editEntryID: String?
+    var tab = "today"
+    var pendingNotices: [SpendNotice] = []
     var key: SymmetricKey?
     var waiting: [CKRecord] = []
     let sync = HouseholdSync()
@@ -122,6 +124,8 @@ final class AppModel {
         drainWaiting()
         catchUp()
         await sync.fetch()
+        await flushNotices()
+        markNoticesLive()
     }
 
     func lock() {
@@ -140,7 +144,38 @@ final class AppModel {
         sync.start()
         drainWaiting()
         catchUp()
-        Task { await sync.fetch() }
+        Task {
+            await sync.fetch()
+            await flushNotices()
+            markNoticesLive()
+        }
+        return true
+    }
+
+    var noticesLive: Bool { UserDefaults.standard.object(forKey: "jar.noticesLive") != nil }
+
+    func flushNotices() async {
+        let notes = pendingNotices
+        pendingNotices.removeAll()
+        for notice in notes { await postSpendNotice(notice) }
+    }
+
+    func markNoticesLive() {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: "jar.noticesLive") == nil {
+            defaults.set(Date().timeIntervalSince1970, forKey: "jar.noticesLive")
+        }
+    }
+
+    func receiveRemoteChange() async -> Bool {
+        boot()
+        guard snapshot.settings != nil else { return false }
+        if key == nil { key = readHouseholdKey() }
+        guard key != nil else { return false }
+        sync.start()
+        await sync.fetch()
+        await flushNotices()
+        markNoticesLive()
         return true
     }
 

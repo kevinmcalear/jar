@@ -1,11 +1,18 @@
 import CloudKit
 import SwiftUI
 import UIKit
+import UserNotifications
 
 @main
 struct JarApp: App {
     @UIApplicationDelegateAdaptor(JarDelegate.self) private var delegate
-    @State private var model = AppModel()
+    @State private var model: AppModel
+
+    init() {
+        let model = AppModel()
+        _model = State(initialValue: model)
+        JarDelegate.held = model
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -17,8 +24,32 @@ struct JarApp: App {
 }
 
 @MainActor
-final class JarDelegate: NSObject, UIApplicationDelegate {
+final class JarDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    static var held: AppModel?
     weak var model: AppModel?
+
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
+        Task { await askNotifications(application) }
+        return true
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+        [.banner, .sound]
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        (model ?? Self.held)?.tab = "today"
+    }
+
+    private func askNotifications(_ application: UIApplication) async {
+        let center = UNUserNotificationCenter.current()
+        let settings = await center.notificationSettings()
+        if settings.authorizationStatus == .notDetermined {
+            _ = try? await center.requestAuthorization(options: [.alert, .sound])
+        }
+        application.registerForRemoteNotifications()
+    }
 
     func application(_ application: UIApplication, userDidAcceptCloudKitShareWith metadata: CKShare.Metadata) {
         let metadata = metadata
@@ -37,6 +68,8 @@ final class JarDelegate: NSObject, UIApplicationDelegate {
                 model.reload()
                 model.sync.start()
                 await model.sync.fetch()
+                await model.flushNotices()
+                model.markNoticesLive()
             } catch {
                 model.shareError = error.localizedDescription
             }
@@ -44,8 +77,11 @@ final class JarDelegate: NSObject, UIApplicationDelegate {
     }
 
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
+        // The push only says an entry changed. The amount is not in this payload.
         _ = userInfo.count
-        await model?.sync.fetch()
-        return .newData
+        let appModel = model ?? Self.held
+        let ready = await appModel?.receiveRemoteChange() ?? false
+        if application.applicationState != .active { appModel?.lock() }
+        return ready ? .newData : .noData
     }
 }
