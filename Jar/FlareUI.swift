@@ -126,85 +126,13 @@ struct CategoryMark: View {
     var size: CGFloat = 28
 
     var body: some View {
-        ZStack {
-            Circle().fill(Flare.ground)
-            Circle().stroke(Flare.paper, lineWidth: 1.5)
-            mark
-            accent
-        }
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
-    }
-
-    @ViewBuilder private var mark: some View {
-        let style = StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round)
-        switch builtIn {
-        case "cocktails", "date": CocktailGlass().stroke(Flare.paper, style: style)
-        case "blowdry": Capsule().stroke(Flare.paper, style: style)
-        case "eating": Bowl().stroke(Flare.paper, style: style)
-        case "snacks", "delivery": Bag().stroke(Flare.paper, style: style)
-        case "worklunch": RoundedRectangle(cornerRadius: 3).stroke(Flare.paper, style: style)
-        case "friends": Circle().stroke(Flare.paper, style: style)
-        case "wine": WineGlass().stroke(Flare.paper, style: style)
-        case "coffee": CoffeeCup().stroke(Flare.paper, style: style)
-        default: Circle().stroke(Flare.paper, style: style)
-        }
-    }
-
-    @ViewBuilder private var accent: some View {
-        Circle().fill(Flare.flare).frame(width: size * 0.22, height: size * 0.22)
-    }
-}
-
-nonisolated struct CocktailGlass: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX + 6, y: rect.minY + 8))
-        path.addLine(to: CGPoint(x: rect.maxX - 6, y: rect.minY + 8))
-        path.addLine(to: CGPoint(x: rect.midX, y: rect.midY + 2))
-        path.closeSubpath()
-        path.move(to: CGPoint(x: rect.midX, y: rect.midY + 2))
-        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY - 8))
-        return path
-    }
-}
-
-nonisolated struct Bowl: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.addArc(center: CGPoint(x: rect.midX, y: rect.midY), radius: rect.width * 0.28, startAngle: .degrees(200), endAngle: .degrees(-20), clockwise: false)
-        return path
-    }
-}
-
-nonisolated struct Bag: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX + 8, y: rect.minY + 12))
-        path.addLine(to: CGPoint(x: rect.maxX - 8, y: rect.minY + 12))
-        path.addLine(to: CGPoint(x: rect.maxX - 6, y: rect.maxY - 8))
-        path.addLine(to: CGPoint(x: rect.minX + 6, y: rect.maxY - 8))
-        path.closeSubpath()
-        return path
-    }
-}
-
-nonisolated struct WineGlass: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX + 8, y: rect.minY + 6))
-        path.addQuadCurve(to: CGPoint(x: rect.maxX - 8, y: rect.minY + 6), control: CGPoint(x: rect.midX, y: rect.midY + 6))
-        path.move(to: CGPoint(x: rect.midX, y: rect.midY))
-        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY - 7))
-        return path
-    }
-}
-
-nonisolated struct CoffeeCup: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.addRoundedRect(in: rect.insetBy(dx: 8, dy: 10).offsetBy(dx: -2, dy: 2), cornerSize: CGSize(width: 4, height: 4))
-        return path
+        // ponytail: asset name is cat-<builtIn key>; a new built-in needs that imageset or the mark is blank.
+        Image("cat-\(builtIn ?? "custom")")
+            .renderingMode(.original)
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
     }
 }
 
