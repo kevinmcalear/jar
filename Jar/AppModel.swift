@@ -23,6 +23,7 @@ final class AppModel {
     var morningNote: String?
     var shove: ShoveShow?
     var addToken: SheetToken?
+    var outsideToken: SheetToken?
     var settingsToken: SheetToken?
     var shareToken: SheetToken?
     var yesterdayToken: SheetToken?

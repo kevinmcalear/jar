@@ -4,169 +4,237 @@ import UIKit
 struct AddSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    @State private var outside = false
+    @State private var step = JarLogStep.category
     @State private var typed = ""
     @State private var categoryID: String?
     @State private var photo: Data?
     @State private var showCamera = false
-    @State private var chip = Chip.groceries
-    @State private var rhythm = PayRhythm.weekly
-    @State private var note = ""
-    @State private var outsideDay = ""
+    @State private var naming = false
+    @State private var newName = ""
+    @State private var working = false
+    @FocusState private var nameFocused: Bool
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(loggingLine)
-                        .font(.subheadline)
-                        .foregroundStyle(Flare.muted)
-                    kindPicker
-                    if outside {
-                        outsideBody
-                    } else {
-                        jarBody
-                    }
-                    Text(typed.isEmpty ? "$0" : "$\(typed)")
-                        .font(Flare.number(64))
-                        .foregroundStyle(Flare.paper)
-                        .frame(maxWidth: .infinity)
-                    MoneyPad(typed: $typed)
-                    Text(outside ? "The jar stays at \(formatCents(model.settledScore.jar))." : "This counts against today.")
-                        .font(.subheadline)
-                        .foregroundStyle(Flare.muted)
-                    Button("Log it") { commit() }
-                        .font(.headline)
-                        .foregroundStyle(Flare.ground)
-                        .frame(maxWidth: .infinity, minHeight: 56)
-                        .background(Flare.flare, in: RoundedRectangle(cornerRadius: 16))
-                        .disabled(cents(typed: typed) <= 0 || (!outside && categoryID == nil))
+            Group {
+                switch step {
+                case .category: categoryStep
+                case .amount: amountStep
+                case .photo: photoStep
+                case .sticker: stickerStep
                 }
-                .padding(20)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(20)
             .background(Flare.ground.ignoresSafeArea())
             .navigationTitle("Add something")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(step == .category ? "Cancel" : "Back") {
+                        if step == .category { dismiss() } else { back() }
+                    }
+                }
+                if step == .amount {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Next") {
+                            if let next = nextJarStep(.amount, tookPhoto: false) { step = next }
+                        }
+                        .disabled(cents(typed: typed) <= 0)
+                    }
+                }
             }
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
-        .onAppear {
-            categoryID = model.snapshot.categories.first { $0.enabled }?.id
-            outsideDay = model.openDate
-        }
         .sheet(isPresented: $showCamera) {
-            CameraPicker { photo = $0 }
+            CameraPicker { data in
+                guard let data else { return }
+                photo = data
+                if let next = nextJarStep(.photo, tookPhoto: true) { step = next }
+            }
         }
     }
 
-    private var loggingLine: String {
-        let name = model.holder?.displayName ?? "Someone"
-        let pronoun = model.holder?.sticker == "bridget" ? "hers" : "his"
-        return "Logging as \(name). This phone is \(pronoun)."
-    }
-
-    private var kindPicker: some View {
-        HStack(spacing: 8) {
-            mode("Today's jar", on: !outside) { outside = false }
-            mode("Outside", on: outside) { outside = true }
-        }
-    }
-
-    private func mode(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
-        Button(title, action: action)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(on ? Flare.ground : Flare.paper)
-            .frame(maxWidth: .infinity, minHeight: 40)
-            .background(on ? (outside && title == "Outside" ? Flare.paper : Flare.flare) : Flare.surface, in: Capsule())
-    }
-
-    private var jarBody: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 8)], spacing: 8) {
-                ForEach(model.snapshot.categories.filter(\.enabled)) { category in
-                    Button { categoryID = category.id } label: {
-                        VStack(spacing: 6) {
-                            CategoryMark(builtIn: category.builtIn, size: 36)
-                            Text(category.name)
-                                .font(.caption)
-                                .foregroundStyle(Flare.paper)
-                                .multilineTextAlignment(.center)
+    private var categoryStep: some View {
+        VStack(spacing: 16) {
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 12)], spacing: 12) {
+                    ForEach(model.snapshot.categories.filter(\.enabled)) { category in
+                        Button {
+                            categoryID = category.id
+                            if let next = nextJarStep(.category, tookPhoto: false) { step = next }
+                        } label: {
+                            CategoryMark(builtIn: category.builtIn, name: category.name, size: 56)
+                                .frame(maxWidth: .infinity, minHeight: 76)
                         }
-                        .frame(maxWidth: .infinity, minHeight: 78)
-                        .background(Flare.surface, in: RoundedRectangle(cornerRadius: 14))
-                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(categoryID == category.id ? Flare.flare : Color.clear, lineWidth: 2))
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(category.name)
                     }
-                    .buttonStyle(.plain)
                 }
             }
-            Button { showCamera = UIImagePickerController.isSourceTypeAvailable(.camera) } label: {
-                HStack {
-                    PhotoFrame()
-                    VStack(alignment: .leading) {
-                        Text("Photo").foregroundStyle(Flare.paper)
-                        Text(photo == nil ? "Take one, or skip" : "One picture, ready")
-                            .font(.caption)
-                            .foregroundStyle(Flare.muted)
-                    }
-                    Spacer()
+            if naming {
+                TextField("Name", text: $newName)
+                    .font(.title3)
+                    .foregroundStyle(Flare.paper)
+                    .padding(12)
+                    .background(Flare.surface, in: RoundedRectangle(cornerRadius: 12))
+                    .focused($nameFocused)
+                    .submitLabel(.done)
+                    .onSubmit(addOwn)
+                Button("Add", action: addOwn)
+                    .font(.headline)
+                    .foregroundStyle(Flare.ground)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(Flare.flare, in: RoundedRectangle(cornerRadius: 16))
+                    .disabled(newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            } else {
+                Button("Add your own") {
+                    naming = true
+                    nameFocused = true
                 }
+                .font(.headline)
+                .foregroundStyle(Flare.paper)
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .background(Flare.surface, in: RoundedRectangle(cornerRadius: 16))
             }
-            .buttonStyle(.plain)
-            .accessibilityHint(UIImagePickerController.isSourceTypeAvailable(.camera) ? "Opens the camera" : "This phone has no camera")
         }
     }
 
-    private var outsideBody: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                ForEach(Chip.allCases) { item in
-                    Button(item.title) {
-                        chip = item
-                        rhythm = item.defaultRhythm
-                    }
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(chip == item ? Flare.ground : Flare.paper)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(chip == item ? Flare.paper : Flare.surface, in: Capsule())
-                }
-            }
-            TextField("Note", text: $note)
-                .padding(12)
-                .background(Flare.surface, in: RoundedRectangle(cornerRadius: 12))
+    private var amountStep: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            Text(typed.isEmpty ? "$0" : "$\(typed)")
+                .font(Flare.number(64))
                 .foregroundStyle(Flare.paper)
-            HStack {
-                ForEach([PayRhythm.once, .weekly, .monthly], id: \.self) { item in
-                    Button(rhythmTitle(item.rawValue)) { rhythm = item }
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(rhythm == item ? Flare.ground : Flare.paper)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(rhythm == item ? Flare.paper : Flare.surface, in: Capsule())
-                }
-            }
-            DatePicker("Day", selection: outsideDate, displayedComponents: .date)
-                .foregroundStyle(Flare.paper)
+                .frame(maxWidth: .infinity)
+            MoneyPad(typed: $typed)
+            Spacer()
         }
     }
 
-    private var outsideDate: Binding<Date> {
-        Binding {
-            date(from: outsideDay.isEmpty ? model.openDate : outsideDay, timeZone: model.timeZone) ?? Date()
-        } set: { outsideDay = formatDay($0, timeZone: model.timeZone) }
+    private var photoStep: some View {
+        VStack(spacing: 12) {
+            Spacer()
+            Button("Take one") {
+                showCamera = UIImagePickerController.isSourceTypeAvailable(.camera)
+            }
+            .font(.headline)
+            .foregroundStyle(Flare.ground)
+            .frame(maxWidth: .infinity, minHeight: 56)
+            .background(Flare.flare, in: RoundedRectangle(cornerRadius: 16))
+            .disabled(!UIImagePickerController.isSourceTypeAvailable(.camera))
+            Button("Skip") {
+                photo = nil
+                save(stickerize: false)
+            }
+            .font(.headline)
+            .foregroundStyle(Flare.paper)
+            .frame(maxWidth: .infinity, minHeight: 52)
+            Spacer()
+        }
     }
 
-    private func commit() {
+    private var stickerStep: some View {
+        VStack(spacing: 12) {
+            if let photo, let image = UIImage(data: photo) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: 280)
+            }
+            Spacer(minLength: 0)
+            Button("Stickerify", action: stickerize)
+                .font(.headline)
+                .foregroundStyle(Flare.ground)
+                .frame(maxWidth: .infinity, minHeight: 56)
+                .background(Flare.flare, in: RoundedRectangle(cornerRadius: 16))
+                .disabled(working || photo == nil)
+            Button("Skip") { save(stickerize: false) }
+                .font(.headline)
+                .foregroundStyle(Flare.paper)
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .disabled(working)
+        }
+    }
+
+    private func back() {
+        switch step {
+        case .amount: step = .category
+        case .photo: step = .amount
+        case .sticker: step = .photo
+        case .category: break
+        }
+    }
+
+    private func addOwn() {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        model.addCategory(name: trimmed)
+        newName = ""
+        naming = false
+    }
+
+    private func stickerize() {
+        guard let photo, let categoryID, !working else { return }
+        working = true
         let amount = cents(typed: typed)
-        if outside {
-            model.logOutside(amount: amount, chip: chip, rhythm: rhythm, note: note, day: outsideDay.isEmpty ? model.openDate : outsideDay)
-        } else if let categoryID {
-            model.logJar(amount: amount, categoryID: categoryID, photo: photo)
-        }
+        let bytes = photo
+        let saved = stickerPNG(bytes) ?? bytes
+        model.logJar(amount: amount, categoryID: categoryID, photo: saved)
         dismiss()
+    }
+
+    private func save(stickerize: Bool) {
+        guard let categoryID, cents(typed: typed) > 0, !working else { return }
+        let saved: Data? = stickerize ? photo.flatMap { stickerPNG($0) ?? $0 } : (step == .sticker ? photo : nil)
+        model.logJar(amount: cents(typed: typed), categoryID: categoryID, photo: saved)
+        dismiss()
+    }
+}
+
+struct OutsideSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var chip = Chip.groceries
+    @State private var typed = ""
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 108), spacing: 8)], spacing: 8) {
+                    ForEach(Chip.allCases) { item in
+                        Button(item.title) { chip = item }
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(chip == item ? Flare.ground : Flare.paper)
+                            .frame(maxWidth: .infinity, minHeight: 40)
+                            .background(chip == item ? Flare.paper : Flare.surface, in: Capsule())
+                    }
+                }
+                Text(typed.isEmpty ? "$0" : "$\(typed)")
+                    .font(Flare.number(64))
+                    .foregroundStyle(Flare.paper)
+                    .frame(maxWidth: .infinity)
+                MoneyPad(typed: $typed)
+                Button("Done") {
+                    model.logOutside(amount: cents(typed: typed), chip: chip, rhythm: chip.defaultRhythm, note: "", day: model.openDate)
+                    dismiss()
+                }
+                .font(.headline)
+                .foregroundStyle(Flare.ground)
+                .frame(maxWidth: .infinity, minHeight: 56)
+                .background(Flare.paper, in: RoundedRectangle(cornerRadius: 16))
+                .disabled(cents(typed: typed) <= 0)
+                Spacer(minLength: 0)
+            }
+            .padding(20)
+            .background(Flare.ground.ignoresSafeArea())
+            .navigationTitle("Outside")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
     }
 }
 
@@ -223,7 +291,7 @@ struct SettingsSheet: View {
                         .foregroundStyle(Flare.muted)
                     ForEach(model.snapshot.categories) { category in
                         HStack {
-                            CategoryMark(builtIn: category.builtIn)
+                            CategoryMark(builtIn: category.builtIn, name: category.name)
                             Text(category.name).foregroundStyle(Flare.paper)
                             Spacer()
                             Toggle(category.name, isOn: enabled(category))

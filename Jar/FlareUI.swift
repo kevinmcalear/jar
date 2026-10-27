@@ -123,16 +123,68 @@ struct PersonSticker: View {
 
 struct CategoryMark: View {
     var builtIn: String?
+    var name: String = ""
     var size: CGFloat = 28
 
+    private var known: Bool {
+        guard let builtIn else { return false }
+        return builtInCategories.contains { $0.key == builtIn }
+    }
+
     var body: some View {
-        // ponytail: asset name is cat-<builtIn key>; a new built-in needs that imageset or the mark is blank.
-        Image("cat-\(builtIn ?? "custom")")
-            .renderingMode(.original)
-            .resizable()
-            .scaledToFit()
-            .frame(width: size, height: size)
-            .accessibilityHidden(true)
+        Group {
+            if known, let builtIn {
+                Image("cat-\(builtIn)")
+                    .renderingMode(.original)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                CustomSeal(name: name)
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+
+struct CustomSeal: View {
+    var name: String
+
+    var body: some View {
+        GeometryReader { geo in
+            let side = min(geo.size.width, geo.size.height)
+            let line = max(1.5, side * 0.08)
+            ZStack {
+                Circle()
+                    .fill(Flare.ground)
+                    .overlay(Circle().stroke(Flare.paper, lineWidth: line))
+                    .padding(line)
+                letterOrShape(side)
+            }
+        }
+    }
+
+    @ViewBuilder private func letterOrShape(_ side: CGFloat) -> some View {
+        let letter = sealMark(name)
+        if letter.isEmpty {
+            sealShape(side * 0.28)
+        } else {
+            Text(letter)
+                .font(Flare.number(side * 0.42))
+                .foregroundStyle(Flare.flare)
+                .minimumScaleFactor(0.5)
+        }
+    }
+
+    @ViewBuilder private func sealShape(_ side: CGFloat) -> some View {
+        switch sealShapeIndex(name) {
+        case 1:
+            Rectangle().fill(Flare.flare).frame(width: side, height: side).rotationEffect(.degrees(45))
+        case 2:
+            Capsule().fill(Flare.flare).frame(width: side, height: side * 0.45)
+        default:
+            Circle().fill(Flare.flare).frame(width: side, height: side)
+        }
     }
 }
 

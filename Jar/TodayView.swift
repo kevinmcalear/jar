@@ -39,6 +39,16 @@ struct TodayView: View {
                     }
                 }
                 rows
+                Button { model.outsideToken = SheetToken() } label: {
+                    Text("Outside")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Flare.paper)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Flare.surface, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Log outside the jar")
                 outside
                 if let note = model.morningNote {
                     Text(note)
@@ -62,7 +72,7 @@ struct TodayView: View {
             }
             ToolbarItem(placement: .topBarPinnedTrailing) {
                 Button { model.addToken = SheetToken() } label: { Image(systemName: "plus") }
-                    .accessibilityLabel("Log something")
+                    .accessibilityLabel("Add something")
             }
         }
     }
@@ -176,7 +186,7 @@ struct TodayView: View {
         let category = model.snapshot.categories.first { $0.id == entry.categoryID }
         return HStack(spacing: 10) {
             PersonSticker(sticker: person?.sticker ?? "kevin", name: person?.displayName ?? "")
-            CategoryMark(builtIn: category?.builtIn)
+            CategoryMark(builtIn: category?.builtIn, name: category?.name ?? "")
             VStack(alignment: .leading, spacing: 2) {
                 Text(person?.displayName ?? "")
                     .foregroundStyle(Flare.paper)

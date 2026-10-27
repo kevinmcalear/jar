@@ -47,6 +47,7 @@ struct RootView: View {
             }
         }
         .sheet(item: $model.addToken) { _ in AddSheet() }
+        .sheet(item: $model.outsideToken) { _ in OutsideSheet() }
         .sheet(item: $model.settingsToken) { _ in SettingsSheet() }
         .sheet(item: $model.yesterdayToken) { _ in YesterdaySheet() }
         .sheet(item: editToken) { _ in EditAmountSheet() }

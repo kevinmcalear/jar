@@ -1,5 +1,6 @@
-import Foundation
+import CoreGraphics
 import CryptoKit
+import Foundation
 
 func check(_ condition: @autoclosure () -> Bool, _ message: String) {
     if !condition() {
@@ -125,4 +126,57 @@ check(5000 - 600 == 4400, "remainder")
 check(pile(remainderCents: 4400).filter(\.full).count == 4 && pile(remainderCents: 4400).last?.cents == 400, "short bill")
 check(snacks.jar == 4400 && snacks.debt == 0, "projected bank")
 check(replay([]).jar == 0 && replay([]).debt == 0, "open day stays unsettled")
+
+check(nextJarStep(.category, tookPhoto: false) == .amount, "category then amount")
+check(nextJarStep(.amount, tookPhoto: false) == .photo, "amount then photo")
+check(nextJarStep(.photo, tookPhoto: false) == nil, "skip photo saves")
+check(nextJarStep(.photo, tookPhoto: true) == .sticker, "photo then sticker")
+check(nextJarStep(.sticker, tookPhoto: true) == nil, "sticker saves")
+check(sealMark("  snacks ") == "S", "seal letter")
+check(sealMark("!!!") == "", "seal shape when there is no letter")
+
+let red = solidImage(CGColor(red: 1, green: 0, blue: 0, alpha: 1), width: 8, height: 8)
+let mask = grayMask(width: 8, height: 8) { x, y in (2..<6).contains(x) && (2..<6).contains(y) }
+if let red, let mask, let cut = dieCut(image: red, mask: mask, stroke: 2), let bytes = rgba(cut) {
+    check(cut.width == 12 && cut.height == 12, "die-cut pad")
+    var clear = 0, white = 0, subject = 0
+    for index in stride(from: 0, to: bytes.count, by: 4) {
+        let r = bytes[index], g = bytes[index + 1], b = bytes[index + 2], a = bytes[index + 3]
+        if a < 10 { clear += 1 }
+        else if r > 230 && g > 230 && b > 230 { white += 1 }
+        else if r > 200 && g < 80 && a > 200 { subject += 1 }
+    }
+    check(clear > 0 && white > 0 && subject > 0, "die-cut keeps the photo inside a white edge")
+} else {
+    check(false, "die-cut image")
+}
 print("ok")
+
+func solidImage(_ color: CGColor, width: Int, height: Int) -> CGImage? {
+    let space = CGColorSpaceCreateDeviceRGB()
+    guard let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+    ctx.setFillColor(color)
+    ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+    return ctx.makeImage()
+}
+
+func grayMask(width: Int, height: Int, includes: (Int, Int) -> Bool) -> CGImage? {
+    let space = CGColorSpaceCreateDeviceGray()
+    guard let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width, space: space, bitmapInfo: CGImageAlphaInfo.none.rawValue), let data = ctx.data else { return nil }
+    let pixels = data.bindMemory(to: UInt8.self, capacity: width * height)
+    for y in 0..<height {
+        for x in 0..<width {
+            pixels[y * width + x] = includes(x, y) ? 255 : 0
+        }
+    }
+    return ctx.makeImage()
+}
+
+func rgba(_ image: CGImage) -> [UInt8]? {
+    let width = image.width, height = image.height
+    var bytes = [UInt8](repeating: 0, count: width * height * 4)
+    let space = CGColorSpaceCreateDeviceRGB()
+    guard let ctx = CGContext(data: &bytes, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4, space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+    ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+    return bytes
+}
