@@ -29,21 +29,59 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
     }
 
     func fetch() async {
-        try? await writer?.fetchChanges()
+        if privateEngine == nil { start() }
+        await adoptSharedHousehold()
+        try? await privateEngine?.fetchChanges()
+        try? await sharedEngine?.fetchChanges()
+        if UserDefaults.standard.bool(forKey: "jar.resync") {
+            UserDefaults.standard.set(false, forKey: "jar.resync")
+            resetSync()
+        }
+        model?.republishIfNeeded()
     }
 
     func makeShare() async throws -> CKShare {
         let zoneID = CKRecordZone.ID(zoneName: "household", ownerName: CKCurrentUserDefaultName)
+        let zone = CKRecordZone(zoneID: zoneID)
+        privateEngine?.state.add(pendingDatabaseChanges: [.saveZone(zone)])
         let database = container.privateCloudDatabase
-        _ = try await database.modifyRecordZones(saving: [CKRecordZone(zoneID: zoneID)], deleting: [])
+        _ = try await database.modifyRecordZones(saving: [zone], deleting: [])
         let share = CKShare(recordZoneID: zoneID)
         share.publicPermission = CKShare.ParticipantPermission.none
         share[CKShare.SystemFieldKey.title] = "Jar" as NSString
         let saved = try await database.modifyRecords(saving: [share], deleting: [])
+        UserDefaults.standard.set(true, forKey: "jar.republish")
+        model?.republishIfNeeded()
         if case let .success(record) = saved.saveResults[share.recordID], let share = record as? CKShare {
             return share
         }
         return share
+    }
+
+    func resetSync() {
+        privateEngine = nil
+        sharedEngine = nil
+        guard let directory else { return }
+        for name in ["sync-private.json", "sync-shared.json"] {
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
+        }
+    }
+
+    private func adoptSharedHousehold() async {
+        guard let zones = try? await container.sharedCloudDatabase.allRecordZones() else { return }
+        let owners = zones.map(\.zoneID).filter { $0.zoneName == "household" }.map(\.ownerName)
+        let adopted = adoptSharedZone(
+            isOwner: model?.snapshot.settings?.isOwner != false,
+            zoneOwner: model?.snapshot.settings?.zoneOwner,
+            sharedZoneOwners: owners
+        )
+        guard var settings = model?.snapshot.settings else { return }
+        guard settings.isOwner != adopted.isOwner || settings.zoneOwner != adopted.zoneOwner else { return }
+        settings.isOwner = adopted.isOwner
+        settings.zoneOwner = adopted.zoneOwner
+        try? model?.store?.insertSettings(settings)
+        model?.reload()
+        UserDefaults.standard.set(true, forKey: "jar.republish")
     }
 
     nonisolated func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
@@ -61,6 +99,7 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
     private func deliver(_ event: CKSyncEngine.Event, _ engine: CKSyncEngine) async {
         switch event {
         case .stateUpdate(let update):
+            guard privateEngine === engine || sharedEngine === engine else { break }
             if let data = try? JSONEncoder().encode(update.stateSerialization) {
                 try? data.write(to: stateURL(engine), options: .atomic)
             }
@@ -72,7 +111,26 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
             await model?.flushNotices()
         case .sentRecordZoneChanges(let sent):
             for failure in sent.failedRecordSaves {
-                if let server = failure.error.serverRecord { model?.apply(server) }
+                if let server = failure.error.serverRecord {
+                    model?.apply(server)
+                } else if UserDefaults.standard.bool(forKey: "jar.republish") || UserDefaults.standard.bool(forKey: "jar.republishArmed") {
+                    UserDefaults.standard.set(true, forKey: "jar.republish")
+                    UserDefaults.standard.set(false, forKey: "jar.republishArmed")
+                }
+            }
+        case .sentDatabaseChanges(let sent):
+            if !sent.failedZoneSaves.isEmpty, UserDefaults.standard.bool(forKey: "jar.republishArmed") {
+                UserDefaults.standard.set(true, forKey: "jar.republish")
+                UserDefaults.standard.set(false, forKey: "jar.republishArmed")
+            }
+        case .didSendChanges:
+            guard UserDefaults.standard.bool(forKey: "jar.republishArmed") else { break }
+            let idle = [privateEngine, sharedEngine].allSatisfy { engine in
+                engine?.state.pendingRecordZoneChanges.isEmpty != false && engine?.state.pendingDatabaseChanges.isEmpty != false
+            }
+            if idle {
+                UserDefaults.standard.set(false, forKey: "jar.republish")
+                UserDefaults.standard.set(false, forKey: "jar.republishArmed")
             }
         default:
             break
@@ -207,11 +265,16 @@ extension AppModel {
     }
 
     func apply(_ record: CKRecord) {
-        let name = record.recordID.recordName
-        if record.recordType != "Person", record.recordType != "Category", key == nil {
-            waiting.append(record)
+        if record.recordType != "Person", record.recordType != "Category", !canReadSealed(record) {
+            if record.recordType == "Settings" {
+                applySettings(record)
+                reload()
+                lockIfKeyDoesNotOpenHousehold()
+            }
+            park(record)
             return
         }
+        let name = record.recordID.recordName
         switch record.recordType {
         case "Settings": applySettings(record)
         case "Person":
@@ -263,6 +326,88 @@ extension AppModel {
         let records = waiting
         waiting = []
         records.forEach(apply)
+        if waiting.isEmpty, let directory = sync.directory {
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent("waiting.ckrecords"))
+        }
+    }
+
+    func joinSharedZone(ownerName: String) {
+        guard !ownerName.isEmpty else { return }
+        var settings = snapshot.settings ?? HouseholdSettings(
+            timezone: TimeZone.current.identifier, closeHour: 4, usualCap: 5000, usualCapChangedAt: stamp(),
+            usualCapSetBy: nil, savingsGoal: nil, kdfSalt: nil, kdfIterations: nil, verifier: nil, holderID: nil,
+            isOwner: false, zoneOwner: ownerName
+        )
+        let changed = settings.isOwner || settings.zoneOwner != ownerName
+        settings.isOwner = false
+        settings.zoneOwner = ownerName
+        try? store?.insertSettings(settings)
+        reload()
+        if changed { UserDefaults.standard.set(true, forKey: "jar.republish") }
+    }
+
+    func republishIfNeeded() {
+        // ponytail: one flag re-sends the whole household after a join or a passphrase change. Fine for two phones; per-record change tags if the zone gets large.
+        guard UserDefaults.standard.bool(forKey: "jar.republish"), opensHousehold() else { return }
+        sync.enqueueSave("settings")
+        snapshot.people.forEach { sync.enqueueSave($0.id) }
+        snapshot.categories.forEach { sync.enqueueSave($0.id) }
+        snapshot.days.forEach { sync.enqueueSave($0.date) }
+        snapshot.entries.forEach { sync.enqueueSave($0.id) }
+        snapshot.income.forEach { sync.enqueueSave($0.id) }
+        snapshot.bills.forEach { sync.enqueueSave($0.id) }
+        UserDefaults.standard.set(true, forKey: "jar.republishArmed")
+    }
+
+    func opensHousehold() -> Bool {
+        guard let key, let verifier = snapshot.settings?.verifier else { return false }
+        return (try? openField(verifier, record: "settings", field: "verifier", key: key)) == householdVerifier
+    }
+
+    private func canReadSealed(_ record: CKRecord) -> Bool {
+        guard let key else { return false }
+        let name = record.recordID.recordName
+        switch record.recordType {
+        case "Settings":
+            if let verifier = data(record, "verifier"), (try? openField(verifier, record: name, field: "verifier", key: key)) == nil { return false }
+            if data(record, "usualCap") != nil, openCents(data(record, "usualCap"), name, "usualCap") == nil { return false }
+            if let goal = data(record, "savingsGoal"), openCents(goal, name, "savingsGoal") == nil { return false }
+            return true
+        case "Day":
+            return data(record, "cap") == nil || openCents(data(record, "cap"), name, "cap") != nil
+        case "Entry", "IncomeSource", "Bill":
+            return data(record, "amount") == nil || openCents(data(record, "amount"), name, "amount") != nil
+        default:
+            return true
+        }
+    }
+
+    private func lockIfKeyDoesNotOpenHousehold() {
+        guard key != nil, snapshot.settings?.verifier != nil, !opensHousehold() else { return }
+        key = nil
+        unlocked = false
+        deleteHouseholdKey()
+        UserDefaults.standard.set(true, forKey: "jar.passphraseReset")
+        UserDefaults.standard.set(true, forKey: "jar.republish")
+        UserDefaults.standard.set(true, forKey: "jar.resync")
+    }
+
+    private func park(_ record: CKRecord) {
+        waiting.removeAll { $0.recordID == record.recordID }
+        waiting.append(record)
+        guard let directory = sync.directory else { return }
+        let url = directory.appendingPathComponent("waiting.ckrecords")
+        guard let data = try? NSKeyedArchiver.archivedData(withRootObject: waiting as NSArray, requiringSecureCoding: true) else { return }
+        try? data.write(to: url, options: .atomic)
+    }
+
+    func loadWaiting() {
+        guard let directory = sync.directory else { return }
+        let url = directory.appendingPathComponent("waiting.ckrecords")
+        guard let data = try? Data(contentsOf: url) else { return }
+        let classes: [AnyClass] = [NSArray.self, CKRecord.self, NSString.self, NSData.self, NSDate.self, NSNumber.self, NSURL.self, CKAsset.self]
+        guard let records = try? NSKeyedUnarchiver.unarchivedObject(ofClasses: classes, from: data) as? [CKRecord] else { return }
+        waiting = records
     }
 
     private func applySettings(_ record: CKRecord) {

@@ -237,9 +237,18 @@ struct UnlockView: View {
             SecureField("Household passphrase", text: $passphrase)
                 .padding(12)
                 .background(Flare.surface, in: RoundedRectangle(cornerRadius: 12))
+            if UserDefaults.standard.bool(forKey: "jar.passphraseReset") {
+                Text("Use the passphrase from the phone that set the jar up.")
+                    .font(.subheadline)
+                    .foregroundStyle(Flare.muted)
+                    .multilineTextAlignment(.center)
+            }
             if failed {
                 Text("That passphrase does not open the jar.")
                     .foregroundStyle(Flare.flare)
+            }
+            if let error = model.shareError {
+                Text(error).font(.caption).foregroundStyle(Flare.flare).multilineTextAlignment(.center)
             }
             Button("Unlock") {
                 failed = !model.unlock(passphrase: passphrase)

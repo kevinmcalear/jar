@@ -52,6 +52,11 @@ func saveHouseholdKey(_ key: SymmetricKey) throws {
     if status != errSecSuccess { throw KeychainError.unreadable }
 }
 
+func deleteHouseholdKey() {
+    let query = [kSecClass: kSecClassGenericPassword, kSecAttrService: "com.kevinmcalear.jar", kSecAttrAccount: "household-key"] as [String: Any]
+    SecItemDelete(query as CFDictionary)
+}
+
 func readHouseholdKey() -> SymmetricKey? {
     let query = [
         kSecClass: kSecClassGenericPassword,

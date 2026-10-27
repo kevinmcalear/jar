@@ -54,18 +54,12 @@ final class JarDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func application(_ application: UIApplication, userDidAcceptCloudKitShareWith metadata: CKShare.Metadata) {
         let metadata = metadata
         Task { @MainActor in
-            guard let model else { return }
+            // Cold launch from the share link runs this before SwiftUI sets `model`.
+            guard let model = self.model ?? Self.held else { return }
+            model.boot()
             do {
                 _ = try await model.sync.container.accept(metadata)
-                var settings = model.snapshot.settings ?? HouseholdSettings(
-                    timezone: TimeZone.current.identifier, closeHour: 4, usualCap: 5000, usualCapChangedAt: stamp(),
-                    usualCapSetBy: nil, savingsGoal: nil, kdfSalt: nil, kdfIterations: nil, verifier: nil, holderID: nil,
-                    isOwner: false, zoneOwner: metadata.share.recordID.zoneID.ownerName
-                )
-                settings.isOwner = false
-                settings.zoneOwner = metadata.share.recordID.zoneID.ownerName
-                try model.store?.insertSettings(settings)
-                model.reload()
+                model.joinSharedZone(ownerName: metadata.share.recordID.zoneID.ownerName)
                 model.sync.start()
                 await model.sync.fetch()
                 await model.flushNotices()

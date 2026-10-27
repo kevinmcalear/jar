@@ -108,6 +108,7 @@ final class AppModel {
             snapshot = try store.load()
             sync.model = self
             sync.directory = store.directory
+            loadWaiting()
             if snapshot.settings != nil { alignCategories() }
         } catch {
             loadError = error.localizedDescription
@@ -187,6 +188,7 @@ final class AppModel {
         guard (try? openField(verifier, record: "settings", field: "verifier", key: derived)) == householdVerifier else { return false }
         key = derived
         try? saveHouseholdKey(derived)
+        UserDefaults.standard.set(false, forKey: "jar.passphraseReset")
         unlocked = true
         if pendingAdd { openAdd() }
         sync.start()

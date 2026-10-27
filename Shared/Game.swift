@@ -303,3 +303,11 @@ func shovePlan(
         afterJar: afterJar
     )
 }
+
+/// A household zone in the shared database means this phone joined someone else's jar.
+/// An empty lookup keeps the current role: a failed fetch must not turn a participant back into an owner.
+func adoptSharedZone(isOwner: Bool, zoneOwner: String?, sharedZoneOwners: [String]) -> (isOwner: Bool, zoneOwner: String?) {
+    guard !sharedZoneOwners.isEmpty else { return (isOwner, zoneOwner) }
+    if let zoneOwner, sharedZoneOwners.contains(zoneOwner) { return (false, zoneOwner) }
+    return (false, sharedZoneOwners[0])
+}
