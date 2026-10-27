@@ -533,8 +533,7 @@ private struct HouseholdInvite: Transferable {
         )
         return CKShareTransferRepresentation { (_: HouseholdInvite) in
             .prepareShare(container: CKContainer(identifier: "iCloud.com.kevinmcalear.dailyjar"), allowedSharingOptions: options) {
-                guard let model = await JarDelegate.held else { throw CocoaError(.userCancelled) }
-                return try await model.sync.makeShare()
+                try await prepareHouseholdShare()
             }
         }
     }

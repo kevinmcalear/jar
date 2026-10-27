@@ -1,6 +1,48 @@
 import CloudKit
 import Foundation
 
+enum InviteShareError: LocalizedError {
+    case noLink
+    var errorDescription: String? { "iCloud did not return an invite link." }
+}
+
+/// Runs off the main actor. The share sheet waits on this, and hopping to the main actor there never finishes.
+nonisolated func prepareHouseholdShare() async throws -> CKShare {
+    let database = CKContainer(identifier: "iCloud.com.kevinmcalear.dailyjar").privateCloudDatabase
+    let zoneID = CKRecordZone.ID(zoneName: "household", ownerName: CKCurrentUserDefaultName)
+    _ = try await database.modifyRecordZones(saving: [CKRecordZone(zoneID: zoneID)], deleting: [])
+    let shareID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zoneID)
+    if let existing = try await zoneShare(database, shareID) { return marked(existing) }
+    let share = CKShare(recordZoneID: zoneID)
+    share.publicPermission = CKShare.ParticipantPermission.none
+    share[CKShare.SystemFieldKey.title] = "Jar" as NSString
+    let saved = try await database.modifyRecords(saving: [share], deleting: [])
+    for result in saved.saveResults.values {
+        switch result {
+        case let .success(record):
+            if let share = record as? CKShare, share.url != nil { return marked(share) }
+        case let .failure(error):
+            if let share = (error as? CKError)?.serverRecord as? CKShare, share.url != nil { return marked(share) }
+        }
+    }
+    if let existing = try await zoneShare(database, shareID) { return marked(existing) }
+    throw InviteShareError.noLink
+}
+
+private nonisolated func zoneShare(_ database: CKDatabase, _ shareID: CKRecord.ID) async throws -> CKShare? {
+    do {
+        guard let share = try await database.record(for: shareID) as? CKShare, share.url != nil else { return nil }
+        return share
+    } catch let error as CKError where error.code == .unknownItem {
+        return nil
+    }
+}
+
+private nonisolated func marked(_ share: CKShare) -> CKShare {
+    UserDefaults.standard.set(true, forKey: "jar.republish")
+    return share
+}
+
 @MainActor
 final class HouseholdSync: NSObject, CKSyncEngineDelegate {
     weak var model: AppModel?
@@ -41,21 +83,7 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
     }
 
     func makeShare() async throws -> CKShare {
-        let zoneID = CKRecordZone.ID(zoneName: "household", ownerName: CKCurrentUserDefaultName)
-        let zone = CKRecordZone(zoneID: zoneID)
-        privateEngine?.state.add(pendingDatabaseChanges: [.saveZone(zone)])
-        let database = container.privateCloudDatabase
-        _ = try await database.modifyRecordZones(saving: [zone], deleting: [])
-        let share = CKShare(recordZoneID: zoneID)
-        share.publicPermission = CKShare.ParticipantPermission.none
-        share[CKShare.SystemFieldKey.title] = "Jar" as NSString
-        let saved = try await database.modifyRecords(saving: [share], deleting: [])
-        UserDefaults.standard.set(true, forKey: "jar.republish")
-        model?.republishIfNeeded()
-        if case let .success(record) = saved.saveResults[share.recordID], let share = record as? CKShare {
-            return share
-        }
-        return share
+        try await prepareHouseholdShare()
     }
 
     func resetSync() {
