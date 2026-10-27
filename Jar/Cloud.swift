@@ -81,27 +81,23 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
     }
 
     private func householdLink() async throws -> URL {
-        switch try await container.accountStatus() {
-        case .available:
-            break
-        case .noAccount:
+        do {
+            return try await existingOrNewShare()
+        } catch let error as CKError where error.code == .notAuthenticated {
             throw InviteShareError.noAccount
-        case .restricted:
-            throw InviteShareError.restricted
-        case .couldNotDetermine, .temporarilyUnavailable:
-            throw InviteShareError.unavailable
-        @unknown default:
-            throw InviteShareError.unavailable
         }
+    }
+
+    private func existingOrNewShare() async throws -> URL {
         let database = container.privateCloudDatabase
         let zoneID = CKRecordZone.ID(zoneName: "household", ownerName: CKCurrentUserDefaultName)
-        _ = try await database.modifyRecordZones(saving: [CKRecordZone(zoneID: zoneID)], deleting: [])
         let shareID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zoneID)
         if let existing = try await zoneShare(database, shareID) {
             if existing.publicPermission == .readWrite, let url = existing.url { return remember(url) }
             existing.publicPermission = .readWrite
             return try await savedURL(database, existing)
         }
+        _ = try await database.modifyRecordZones(saving: [CKRecordZone(zoneID: zoneID)], deleting: [])
         let share = CKShare(recordZoneID: zoneID)
         share.publicPermission = .readWrite
         share[CKShare.SystemFieldKey.title] = "Jar" as NSString
@@ -111,7 +107,7 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
     private func zoneShare(_ database: CKDatabase, _ shareID: CKRecord.ID) async throws -> CKShare? {
         do {
             return try await database.record(for: shareID) as? CKShare
-        } catch let error as CKError where error.code == .unknownItem {
+        } catch let error as CKError where error.code == .unknownItem || error.code == .zoneNotFound {
             return nil
         }
     }

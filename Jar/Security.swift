@@ -18,22 +18,15 @@ func deviceCanUnlock() -> Bool {
     return LAContext().canEvaluatePolicy(.deviceOwnerAuthentication, error: &error)
 }
 
-func evaluateUnlock() async -> Bool {
+func evaluateUnlock() async -> LAContext? {
     let context = LAContext()
+    // Reuse this success for the keychain read. A second evaluatePolicy, or a biometry-protected item with no context, prompts again.
+    context.touchIDAuthenticationAllowableReuseDuration = 10
+    guard deviceCanUnlock() else { return context }
     var error: NSError?
-    let reason = "Unlock Jar"
-    if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
-        if let ok = try? await context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason), ok {
-            return true
-        }
-    }
-    if context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) {
-        if let ok = try? await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason), ok {
-            return true
-        }
-    }
-    // ponytail: a simulator or a device with no passcode cannot satisfy Face ID. The key stays on this device only until a passcode exists.
-    return !deviceCanUnlock()
+    guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else { return nil }
+    guard (try? await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Unlock Jar")) == true else { return nil }
+    return context
 }
 
 func saveHouseholdKey(_ key: SymmetricKey) throws {
@@ -57,14 +50,15 @@ func deleteHouseholdKey() {
     SecItemDelete(query as CFDictionary)
 }
 
-func readHouseholdKey() -> SymmetricKey? {
-    let query = [
+func readHouseholdKey(context: LAContext? = nil) -> SymmetricKey? {
+    var query = [
         kSecClass: kSecClassGenericPassword,
         kSecAttrService: "com.kevinmcalear.jar",
         kSecAttrAccount: "household-key",
         kSecReturnData: true,
         kSecAttrSynchronizable: false,
     ] as [String: Any]
+    if let context { query[kSecUseAuthenticationContext as String] = context }
     var item: CFTypeRef?
     let status = SecItemCopyMatching(query as CFDictionary, &item)
     guard status == errSecSuccess, let data = item as? Data, !data.isEmpty else { return nil }

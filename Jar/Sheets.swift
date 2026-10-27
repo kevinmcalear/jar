@@ -354,10 +354,12 @@ struct SettingsSheet: View {
     private func sendInvite() async {
         inviting = true
         model.shareError = nil
+        model.suspendLock = true
         defer { inviting = false }
         do {
             presentLink(try await model.sync.inviteLink())
         } catch {
+            model.suspendLock = false
             model.shareError = inviteFailureText(error)
         }
     }
@@ -367,12 +369,19 @@ struct SettingsSheet: View {
             .compactMap { $0 as? UIWindowScene }
             .first { $0.activationState == .foregroundActive }
         guard let root = scene?.keyWindow?.rootViewController else {
+            model.suspendLock = false
             model.shareError = "Could not open the share sheet."
             return
         }
         var top = root
         while let next = top.presentedViewController, !next.isBeingDismissed { top = next }
-        top.present(UIActivityViewController(activityItems: [url], applicationActivities: nil), animated: true)
+        let sheet = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        sheet.completionWithItemsHandler = { _, _, _, _ in
+            Task { @MainActor in
+                model.suspendLock = false
+            }
+        }
+        top.present(sheet, animated: true)
     }
 
     private func enabled(_ category: JarCategory) -> Binding<Bool> {

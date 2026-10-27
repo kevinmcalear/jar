@@ -19,6 +19,8 @@ final class AppModel {
     var snapshot = Snapshot()
     var booted = false
     var unlocked = false
+    var suspendLock = false
+    private var waking = false
     var loadError: String?
     var shareError: String?
     var morningNote: String?
@@ -162,8 +164,14 @@ final class AppModel {
     func wake() async {
         guard booted, snapshot.settings != nil else { return }
         if key == nil {
-            _ = await evaluateUnlock()
-            key = readHouseholdKey()
+            guard !waking else { return }
+            waking = true
+            defer { waking = false }
+            guard let context = await evaluateUnlock() else {
+                unlocked = false
+                return
+            }
+            key = readHouseholdKey(context: context)
         }
         unlocked = key != nil
         guard unlocked else { return }
@@ -177,6 +185,7 @@ final class AppModel {
     }
 
     func lock() {
+        guard !suspendLock else { return }
         guard snapshot.settings != nil, deviceCanUnlock() else { return }
         key = nil
         unlocked = false
