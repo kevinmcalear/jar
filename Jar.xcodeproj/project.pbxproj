@@ -354,7 +354,7 @@
 				CODE_SIGN_ENTITLEMENTS = Jar/Jar.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = P58KM93MV5;
+				DEVELOPMENT_TEAM = X992AGRP7X;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Jar/Info.plist;
@@ -364,7 +364,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				OTHER_LDFLAGS = "-lsqlite3";
-				PRODUCT_BUNDLE_IDENTIFIER = com.kevinmcalear.jar;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kevinmcalear.dailyjar;
 				PRODUCT_NAME = Jar;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -383,7 +383,7 @@
 				CODE_SIGN_ENTITLEMENTS = Jar/Jar.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = P58KM93MV5;
+				DEVELOPMENT_TEAM = X992AGRP7X;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Jar/Info.plist;
@@ -393,7 +393,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				OTHER_LDFLAGS = "-lsqlite3";
-				PRODUCT_BUNDLE_IDENTIFIER = com.kevinmcalear.jar;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kevinmcalear.dailyjar;
 				PRODUCT_NAME = Jar;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -447,7 +447,7 @@
 				CODE_SIGN_ENTITLEMENTS = JarWidget/JarWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = P58KM93MV5;
+				DEVELOPMENT_TEAM = X992AGRP7X;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = JarWidget/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -456,7 +456,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.kevinmcalear.jar.widget;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kevinmcalear.dailyjar.widget;
 				PRODUCT_NAME = JarWidget;
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -474,7 +474,7 @@
 				CODE_SIGN_ENTITLEMENTS = JarWidget/JarWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = P58KM93MV5;
+				DEVELOPMENT_TEAM = X992AGRP7X;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = JarWidget/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -483,7 +483,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.kevinmcalear.jar.widget;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kevinmcalear.dailyjar.widget;
 				PRODUCT_NAME = JarWidget;
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

@@ -1,7 +1,7 @@
 import Foundation
 
 enum PileBoard {
-    static let suite = "group.com.kevinmcalear.jar"
+    static let suite = "group.com.kevinmcalear.dailyjar"
     static let add = URL(string: "jar://add")!
     private static let key = "left"
 

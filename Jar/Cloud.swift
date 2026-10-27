@@ -5,7 +5,7 @@ import Foundation
 final class HouseholdSync: NSObject, CKSyncEngineDelegate {
     weak var model: AppModel?
     var directory: URL?
-    let container = CKContainer(identifier: "iCloud.com.kevinmcalear.jar")
+    let container = CKContainer(identifier: "iCloud.com.kevinmcalear.dailyjar")
     private var privateEngine: CKSyncEngine?
     private var sharedEngine: CKSyncEngine?
     private var queued: [CKSyncEngine.PendingRecordZoneChange] = []
