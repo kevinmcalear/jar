@@ -247,6 +247,8 @@ check(shouldPostSpendNotice(kind: "jar", noticesLive: true, changed: true), "a n
 check(!shouldPostSpendNotice(kind: "outside", noticesLive: true, changed: true), "outside is quiet")
 check(!shouldPostSpendNotice(kind: "jar", noticesLive: true, changed: false), "unchanged spend is quiet")
 check(!shouldPostSpendNotice(kind: "jar", noticesLive: false, changed: true), "first sync is quiet")
+check(!silentPushCarriesSpend(nil, fieldKeys: nil), "a silent push carries no spend")
+check(silentPushCarriesSpend("$6.50", fieldKeys: nil) && silentPushCarriesSpend(nil, fieldKeys: ["amount"]), "an alert or a field would leak the amount")
 check(spendNoticeBody(amount: 650, note: nil, left: 2150) == "$6.50 · $21.50 left", "notice is the amount and what is left")
 check(spendNoticeBody(amount: 650, note: "iced latte", left: 2150) == "$6.50 · iced latte · $21.50 left", "notice includes the note")
 check(spendNoticeBody(amount: 650, note: "  ", left: 2150) == "$6.50 · $21.50 left", "a blank note stays out")

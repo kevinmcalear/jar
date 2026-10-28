@@ -30,6 +30,7 @@ final class JarDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        application.registerForRemoteNotifications()
         Task { await askNotifications(application) }
         return true
     }
@@ -87,9 +88,7 @@ final class JarDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
         // The push only says an entry changed. The amount is not in this payload.
         _ = userInfo.count
-        let appModel = model ?? Self.held
-        let ready = await appModel?.receiveRemoteChange() ?? false
-        if application.applicationState != .active { appModel?.lock() }
+        let ready = await (model ?? Self.held)?.receiveRemoteChange() ?? false
         return ready ? .newData : .noData
     }
 }

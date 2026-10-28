@@ -311,6 +311,9 @@ final class AppModel {
                 return
             }
             key = readHouseholdKey(context: context)
+            if let key, !UserDefaults.standard.bool(forKey: "jar.keyAfterFirstUnlock") {
+                try? saveHouseholdKey(key, context: context)
+            }
         }
         unlocked = key != nil
         guard unlocked else { return }
@@ -368,12 +371,17 @@ final class AppModel {
     func receiveRemoteChange() async -> Bool {
         boot()
         guard snapshot.settings != nil else { return false }
+        let held = key != nil
         if key == nil { key = readHouseholdKey() }
         guard key != nil else { return false }
         sync.start()
         await sync.fetch()
         await flushNotices()
         markNoticesLive()
+        if !held {
+            key = nil
+            unlocked = false
+        }
         return true
     }
 

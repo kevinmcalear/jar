@@ -19,7 +19,12 @@ struct RootView: View {
         }
         .background(Flare.ground.ignoresSafeArea())
         .preferredColorScheme(model.picture.climbs ? .light : .dark)
-        .task { model.boot(); await model.wake() }
+        .task {
+            model.boot()
+            // A silent push launches in the background. Face ID here would block the download.
+            guard scenePhase != .background else { return }
+            await model.wake()
+        }
         .onOpenURL { url in
             if isCloudKitShareURL(url) {
                 Task { await model.acceptShare(url: url) }

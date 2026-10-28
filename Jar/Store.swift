@@ -19,7 +19,8 @@ final class Store {
         values.isExcludedFromBackup = true
         var folder = directory
         try folder.setResourceValues(values)
-        try FileManager.default.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: directory.path)
+        // ponytail: completeUntilFirstUserAuthentication, not complete. A locked phone has to open this cache when a silent push arrives. The screen still asks for Face ID.
+        protect(directory)
         let path = directory.appendingPathComponent("jar.sqlite").path
         if sqlite3_open(path, &db) != SQLITE_OK {
             throw StoreError(message: "The jar cache did not open.")
@@ -27,10 +28,17 @@ final class Store {
         try exec("PRAGMA journal_mode = WAL")
         try exec("PRAGMA foreign_keys = ON")
         try migrate()
-        try FileManager.default.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: path)
+        protect(directory)
+        if let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) {
+            for file in files { protect(file) }
+        }
     }
 
     deinit { sqlite3_close(db) }
+
+    private func protect(_ url: URL) {
+        try? FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: url.path)
+    }
 
     func load() throws -> Snapshot {
         guard let settings = try loadSettings() else {

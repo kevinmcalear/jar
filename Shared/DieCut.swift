@@ -24,6 +24,12 @@ func shouldPostSpendNotice(kind: String, noticesLive: Bool, changed: Bool) -> Bo
     kind == "jar" && noticesLive && changed
 }
 
+/// The push itself stays empty. An alert or a record field would put the amount on the wire.
+func silentPushCarriesSpend(_ alert: String?, fieldKeys: [String]?) -> Bool {
+    let text = alert?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return !text.isEmpty || !(fieldKeys ?? []).isEmpty
+}
+
 func spendNoticeBody(amount: Int, note: String?, left: Int, removed: Bool = false) -> String {
     if removed { return "Removed \(formatCents(amount))" }
     let trimmed = note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""

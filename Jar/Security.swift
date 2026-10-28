@@ -29,20 +29,20 @@ func evaluateUnlock() async -> LAContext? {
     return context
 }
 
-func saveHouseholdKey(_ key: SymmetricKey) throws {
+func saveHouseholdKey(_ key: SymmetricKey, context: LAContext? = nil) throws {
     let data = key.withUnsafeBytes { Data($0) }
-    let query = [kSecClass: kSecClassGenericPassword, kSecAttrService: "com.kevinmcalear.jar", kSecAttrAccount: "household-key"] as [String: Any]
-    SecItemDelete(query as CFDictionary)
-    var insert = query
+    var delete = [kSecClass: kSecClassGenericPassword, kSecAttrService: "com.kevinmcalear.jar", kSecAttrAccount: "household-key"] as [String: Any]
+    if let context { delete[kSecUseAuthenticationContext as String] = context }
+    SecItemDelete(delete as CFDictionary)
+    var insert = delete
+    insert.removeValue(forKey: kSecUseAuthenticationContext as String)
     insert[kSecValueData as String] = data
     insert[kSecAttrSynchronizable as String] = false
-    insert[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-    if let access = keyAccess() {
-        insert[kSecAttrAccessControl as String] = access
-        insert.removeValue(forKey: kSecAttrAccessible as String)
-    }
+    // ponytail: AfterFirstUnlock and no Face ID on the item. A silent push has to decrypt while the phone is locked. The screen still asks for Face ID. Put biometry back only if background notices go away.
+    insert[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
     let status = SecItemAdd(insert as CFDictionary, nil)
     if status != errSecSuccess { throw KeychainError.unreadable }
+    UserDefaults.standard.set(true, forKey: "jar.keyAfterFirstUnlock")
 }
 
 func deleteHouseholdKey() {
@@ -65,7 +65,3 @@ func readHouseholdKey(context: LAContext? = nil) -> SymmetricKey? {
     return SymmetricKey(data: data)
 }
 
-private func keyAccess() -> SecAccessControl? {
-    guard deviceCanUnlock() else { return nil }
-    return SecAccessControlCreateWithFlags(nil, kSecAttrAccessibleWhenUnlockedThisDeviceOnly, [.biometryCurrentSet, .or, .devicePasscode], nil)
-}

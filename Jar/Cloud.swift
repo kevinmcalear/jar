@@ -66,6 +66,7 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
     private var sharedEngine: CKSyncEngine?
     private var queued: [CKSyncEngine.PendingRecordZoneChange] = []
     private var extraSends = 0
+    private var pushesArmed = false
 
     func start() {
         let fresh = privateEngine == nil && sharedEngine == nil
@@ -75,10 +76,11 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
         if sharedEngine == nil {
             sharedEngine = engine(container.sharedCloudDatabase, "sync-shared.json")
         }
-        guard fresh else { return }
-        let pending = queued
-        queued = []
-        writer?.state.add(pendingRecordZoneChanges: pending)
+        if fresh {
+            let pending = queued
+            queued = []
+            writer?.state.add(pendingRecordZoneChanges: pending)
+        }
         Task { await installSubscriptions() }
     }
 
@@ -103,6 +105,7 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
     }
 
     func fetch() async {
+        if !pushesArmed { await installSubscriptions() }
         // One open downloads the whole zone. A cursor that already says "caught up" was skipping a spend that never arrived.
         let refetch = UserDefaults.standard.string(forKey: "jar.zoneRefetch") != "17" || UserDefaults.standard.bool(forKey: "jar.resync")
         if refetch {
@@ -370,16 +373,24 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
     }
 
     private func installSubscriptions() async {
+        if pushesArmed { return }
         // Silent push only: content-available, no alert and no record fields. The amount stays ciphertext until this phone decrypts it.
-        let info = CKSubscription.NotificationInfo()
-        info.shouldSendContentAvailable = true
-        info.shouldBadge = false
-        let subscription = CKDatabaseSubscription(subscriptionID: "jar-database")
-        subscription.notificationInfo = info
+        var armed = true
         for database in [container.privateCloudDatabase, container.sharedCloudDatabase] {
-            _ = try? await database.modifySubscriptions(saving: [subscription], deleting: [])
+            let info = CKSubscription.NotificationInfo()
+            info.shouldSendContentAvailable = true
+            info.shouldBadge = false
+            guard !silentPushCarriesSpend(info.alertBody, fieldKeys: info.desiredKeys) else { return }
+            let subscription = CKDatabaseSubscription(subscriptionID: "jar-database")
+            subscription.notificationInfo = info
+            do {
+                _ = try await database.modifySubscriptions(saving: [subscription], deleting: [])
+            } catch {
+                armed = false
+            }
             _ = try? await database.modifySubscriptions(saving: [], deleting: ["jar-entry"])
         }
+        if armed { pushesArmed = true }
     }
 }
 
