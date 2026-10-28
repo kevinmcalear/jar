@@ -117,6 +117,10 @@ func jarSizeLine(cents: Int) -> String {
     "\(formatCents(jarCapacity(cents: cents))) jar"
 }
 
+func jarOfLine(cents: Int) -> String {
+    "\(formatCents(cents)) of \(formatCents(jarCapacity(cents: cents)))"
+}
+
 func nextJarLine(cents: Int) -> String {
     "\(formatCents(jarUpgradeGap(cents: cents))) to the next jar upgrade"
 }
