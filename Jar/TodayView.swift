@@ -43,15 +43,7 @@ struct TodayView: View {
                     }
                 }
                 rows
-                Button { model.outsideToken = SheetToken() } label: {
-                    Text("Log $ outside the jar")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Flare.paper)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(Flare.surface, in: Capsule())
-                }
-                .buttonStyle(.plain)
+                // ponytail: the button is hidden until outside logging comes back. OutsideSheet is still on RootView via outsideToken.
                 outside
                 if let note = model.morningNote {
                     Text(note)
