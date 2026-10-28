@@ -175,18 +175,28 @@ struct TodayView: View {
                 ScoreJar(fill: jarFill(cents: settled.jar), stroke: Flare.paper, gaps: settled.jar == 0 ? 1 : 0, width: 72)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(formatCents(settled.jar))
-                    .font(Flare.number(28))
-                    .foregroundStyle(ink)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(formatCents(settled.jar))
+                        .font(Flare.number(28))
+                        .foregroundStyle(ink)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                    if case .hole = picture {
+                        EmptyView()
+                    } else {
+                        Text(jarSizeLine(cents: settled.jar))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(ink)
+                            .lineLimit(1)
+                    }
+                }
                 Text("in the jar")
                     .font(.subheadline)
                     .foregroundStyle(Flare.muted)
                 if case .hole = picture {
                     EmptyView()
                 } else {
-                    Text("full at \(formatCents(jarCapacity(cents: settled.jar)))")
+                    Text(nextJarLine(cents: settled.jar))
                         .font(.subheadline)
                         .foregroundStyle(Flare.muted)
                 }

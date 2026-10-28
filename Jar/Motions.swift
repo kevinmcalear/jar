@@ -123,9 +123,18 @@ struct ShoveView: View {
     private func glass(_ pose: ShovePose) -> some View {
         VStack(spacing: 18) {
             ScoreJar(fill: pose.fill, stroke: Flare.paper, gaps: pose.fill == 0 ? 1 : 0, width: 180 * pose.scale)
-            Text("full at \(formatCents(pose.goal))")
-                .font(.subheadline)
-                .foregroundStyle(Flare.muted)
+            if pose.upgraded {
+                Text("Jar upgraded!")
+                    .font(Flare.number(28))
+                    .foregroundStyle(Flare.flare)
+            } else {
+                Text(nextJarLine(cents: pose.goal))
+                    .font(.subheadline)
+                    .foregroundStyle(Flare.muted)
+            }
+            Text(jarSizeLine(cents: pose.goal))
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Flare.paper)
             if shove.plan.billCents > 0 {
                 BillPile(cents: shove.plan.billCents)
                     .offset(y: pose.billY)

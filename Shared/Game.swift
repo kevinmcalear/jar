@@ -106,12 +106,27 @@ func facePose(at t: Double) -> FacePose {
     return FacePose(headScale: headScale, wiggle: wiggle, headY: -640 * leave, headAlpha: appear, fly: fly, billAlpha: billAlpha)
 }
 
+func nextJarUpgrade(cents: Int) -> Int {
+    let current = jarCapacity(cents: cents)
+    let next = current * 2
+    return next > current ? next : current
+}
+
+func jarSizeLine(cents: Int) -> String {
+    "\(formatCents(jarCapacity(cents: cents))) jar"
+}
+
+func nextJarLine(cents: Int) -> String {
+    "next jar upgrade at \(formatCents(nextJarUpgrade(cents: cents)))"
+}
+
 struct ShovePose: Equatable {
     var billY: Double
     var billAlpha: Double
     var fill: Double
     var scale: Double
     var goal: Int
+    var upgraded: Bool
 }
 
 /// Leftover bills rise, then drop into the mouth. Crossing a full jar swells the glass and lets it settle back at the next goal.
@@ -145,7 +160,8 @@ func shovePose(at t: Double, beforeJar: Int, afterJar: Int) -> ShovePose {
         scale = 1 + 0.45 * swellUp * (1 - swellDown)
         if time >= 0.6 { goal = jarCapacity(cents: afterJar) }
     }
-    return ShovePose(billY: billY, billAlpha: billAlpha, fill: fill, scale: scale, goal: goal)
+    let passed = !crossings.isEmpty && scale > 1 && goal != jarCapacity(cents: beforeJar)
+    return ShovePose(billY: billY, billAlpha: billAlpha, fill: fill, scale: scale, goal: goal, upgraded: passed)
 }
 
 func replay(_ days: [(cap: Int, spent: Int)]) -> (jar: Int, debt: Int) {
