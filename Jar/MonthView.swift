@@ -193,11 +193,6 @@ struct WeekView: View {
             if jar.isEmpty {
                 Text("Nothing logged").font(.subheadline).foregroundStyle(Flare.muted)
             }
-            if canEditJarDay(day, open: model.openDate) {
-                Button("Add something") { model.openAdd(on: day) }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Flare.paper)
-            }
             ForEach(outside) { entry in
                 HStack {
                     VStack(alignment: .leading) {
@@ -206,6 +201,19 @@ struct WeekView: View {
                     }
                     Spacer()
                     Text(formatCents(entry.amount)).foregroundStyle(Flare.muted)
+                }
+            }
+            if canEditJarDay(day, open: model.openDate) {
+                HStack {
+                    Spacer()
+                    Button { model.openAdd(on: day) } label: {
+                        Image(systemName: "plus")
+                            .font(.body.weight(.bold))
+                            .frame(width: 32, height: 32)
+                    }
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
+                    .accessibilityLabel("Add something")
                 }
             }
         }
