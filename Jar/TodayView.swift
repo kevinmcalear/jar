@@ -180,7 +180,7 @@ struct TodayView: View {
             case .hole:
                 ScoreJar(fill: 0, stroke: Flare.paper, gaps: 1, width: 72)
             default:
-                ScoreJar(fill: min(1, Double(settled.jar) / 30000), stroke: Flare.paper, gaps: settled.jar == 0 ? 0 : 0, width: 72)
+                ScoreJar(fill: jarFill(cents: settled.jar), stroke: Flare.paper, gaps: settled.jar == 0 ? 1 : 0, width: 72)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(formatCents(settled.jar))

@@ -30,6 +30,8 @@ func entrySaveProblem(_ error: CKError) -> EntrySaveProblem {
         return .schema
     case .referenceViolation, .unknownItem:
         return .missingReference
+    case .assetFileNotFound, .assetNotAvailable:
+        return .asset
     case .batchRequestFailed:
         return .batch
     default:
@@ -90,6 +92,11 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
         change(.saveRecord(recordID(name)))
     }
 
+    func sendSoon() {
+        guard writer != nil else { return }
+        Task { try? await writer?.sendChanges() }
+    }
+
     func enqueueDelete(_ name: String) {
         change(.deleteRecord(recordID(name)))
     }
@@ -107,6 +114,11 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
         model?.healLostFaces()
         model?.publishRoster()
         model?.republishIfNeeded()
+        // A spend that never reached the server goes out on its own, before older rows that might still be rejected.
+        if model?.repushUnconfirmedEntries() == true {
+            try? await writer?.sendChanges()
+            try? await writer?.sendChanges()
+        }
         if model?.repushLocalEntries() == true || model?.repushNamedEntries() == true {
             try? await writer?.sendChanges()
         }
@@ -272,6 +284,7 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
                 model?.saveAttempts[name] = attempt + 1
                 if decision.dropReferences { model?.markBareEntry(name) }
                 if decision.dropNames { model?.omitEntryNames = true }
+                if decision.dropPhoto { model?.omitEntryPhoto = true }
                 if decision.retry { model?.sync.enqueueSave(name) }
             }
             for (id, error) in sent.failedRecordDeletes {
@@ -367,10 +380,17 @@ extension AppModel {
         return !mine.isEmpty
     }
 
+    /// A spend that never got a server record is sent again until it does. A few tries per launch, so one bad row cannot sit in every batch forever.
+    func repushUnconfirmedEntries() -> Bool {
+        let pending = snapshot.entries.filter { $0.originLocal && systemFields[$0.id] == nil && (saveAttempts[$0.id] ?? 0) < 3 }
+        pending.forEach { sync.enqueueSave($0.id) }
+        return !pending.isEmpty
+    }
+
     /// Keep offering the name fields until production accepts one. A rejection retries that launch without them, so the spend still syncs.
     func repushNamedEntries() -> Bool {
         guard !UserDefaults.standard.bool(forKey: "jar.namesOnServer") else { return false }
-        let mine = snapshot.entries.filter(\.originLocal)
+        let mine = snapshot.entries.filter { $0.originLocal && systemFields[$0.id] != nil }
         mine.forEach { sync.enqueueSave($0.id) }
         return !mine.isEmpty
     }
@@ -483,10 +503,12 @@ extension AppModel {
             if let note = entry.note, let sealed = try? sealField(Data(note.utf8), record: name, field: "note", key: key) {
                 record["note"] = sealed as NSData
             }
-            if let photo = entry.photo, let sealed = try? sealField(photo, record: name, field: "photo", key: key) {
-                let url = sync.directory?.appendingPathComponent("photo-\(name).bin") ?? URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("photo-\(name).bin")
-                try? sealed.write(to: url)
-                record["photo"] = CKAsset(fileURL: url)
+            if let photo = entry.photo, !omitEntryPhoto, let sealed = try? sealField(photo, record: name, field: "photo", key: key) {
+                // CloudKit reads this file from another process. The jar folder is locked when the phone locks, so the photo lives in tmp.
+                let url = FileManager.default.temporaryDirectory.appendingPathComponent("jar-photo-\(name).bin")
+                if (try? sealed.write(to: url)) != nil {
+                    record["photo"] = CKAsset(fileURL: url)
+                }
             }
             return record
         }
@@ -678,7 +700,7 @@ extension AppModel {
         }
         await flushNotices()
         markNoticesLive()
-        tab = "month"
+        tab = "week"
     }
 
     func republishIfNeeded() {

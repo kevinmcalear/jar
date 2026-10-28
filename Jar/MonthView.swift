@@ -1,64 +1,48 @@
 import SwiftUI
 
-struct MonthView: View {
+struct WeekView: View {
     @Environment(AppModel.self) private var model
-    @State private var month = Date()
+    @State private var anchor = ""
     @State private var openDate: String?
 
     var body: some View {
-        let parts = monthParts
+        let week = weekInterval(containing: focus, timeZone: model.timeZone)
         ScrollView {
             VStack(spacing: 14) {
-                ForEach(weeksTouching(year: parts.year, month: parts.month, timeZone: model.timeZone), id: \.start) { week in
-                    weekCard(week)
-                }
+                weekCard(week)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 28)
         }
         .background(Flare.ground.ignoresSafeArea())
-        .navigationTitle(title)
-        .navigationSubtitle(monthSpentLine)
+        .navigationTitle(rangeTitle(week))
+        .navigationSubtitle(spentLine(week))
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button { shift(-1) } label: { Image(systemName: "chevron.left") }
-                    .accessibilityLabel("Previous month")
+                    .accessibilityLabel("Previous week")
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button { shift(1) } label: { Image(systemName: "chevron.right") }
-                    .accessibilityLabel("Next month")
+                    .accessibilityLabel("Next week")
             }
         }
     }
 
-    private var monthSpentLine: String {
-        let parts = monthParts
-        let prefix = String(format: "%04d-%02d-", parts.year, parts.month)
+    private var focus: String { anchor.isEmpty ? model.openDate : anchor }
+
+    private func spentLine(_ week: (start: String, end: String)) -> String {
+        let days = daysFrom(week.start, until: addDays(week.end, 1, timeZone: model.timeZone), timeZone: model.timeZone)
         let total = model.snapshot.entries.reduce(0) { sum, entry in
-            entry.kind == "jar" && entry.day.hasPrefix(prefix) ? sum + entry.amount : sum
+            entry.kind == "jar" && days.contains(entry.day) ? sum + entry.amount : sum
         }
         return "\(formatCents(total)) spent"
     }
 
-    private var title: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = model.timeZone
-        formatter.dateFormat = "MMMM"
-        return formatter.string(from: month)
-    }
-
-    private var monthParts: (year: Int, month: Int) {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = model.timeZone
-        return (calendar.component(.year, from: month), calendar.component(.month, from: month))
-    }
-
     private func shift(_ delta: Int) {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = model.timeZone
-        month = calendar.date(byAdding: .month, value: delta, to: month) ?? month
+        let start = weekInterval(containing: focus, timeZone: model.timeZone).start
+        anchor = addDays(start, delta * 7, timeZone: model.timeZone)
         openDate = nil
     }
 
@@ -71,9 +55,6 @@ struct MonthView: View {
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(rangeTitle(week))
-                        .font(.headline)
-                        .foregroundStyle(Flare.paper)
                     if spent > 0 {
                         Text("\(formatCents(spent)) spent")
                             .font(.subheadline.weight(.semibold))

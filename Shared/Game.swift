@@ -39,6 +39,14 @@ func project(jar: Int, debt: Int, cap: Int, spent: Int) -> (jar: Int, debt: Int)
     settle(jar: jar, debt: debt, cap: cap, spent: spent)
 }
 
+/// The glass fills toward the next $50. $46.77 is nearly full. $50 is full, and the next dollar starts the glass toward $100.
+func jarFill(cents: Int, step: Int = 5000) -> Double {
+    guard cents > 0, step > 0 else { return 0 }
+    let into = cents % step
+    if into == 0 { return 1 }
+    return Double(into) / Double(step)
+}
+
 func replay(_ days: [(cap: Int, spent: Int)]) -> (jar: Int, debt: Int) {
     days.reduce((jar: 0, debt: 0)) { pair, day in
         settle(jar: pair.jar, debt: pair.debt, cap: day.cap, spent: day.spent)
@@ -258,6 +266,11 @@ func yearNumber(_ day: String) -> Int {
     Int(day.prefix(4)) ?? 0
 }
 
+func monthsWithDays(_ days: [String], year: Int) -> [String] {
+    let prefix = String(format: "%04d-", year)
+    return Set(days.filter { $0.hasPrefix(prefix) }.map { String($0.prefix(7)) }).sorted()
+}
+
 func daysAfter(_ day: String, throughYear year: Int, timeZone: TimeZone) -> Int {
     let end = String(format: "%04d-01-01", year + 1)
     return daysFrom(addDays(day, 1, timeZone: timeZone), until: end, timeZone: timeZone).count
@@ -359,6 +372,7 @@ enum EntrySaveProblem: Equatable {
     case conflict
     case schema
     case missingReference
+    case asset
     case batch
     case other
 }
@@ -367,19 +381,24 @@ struct EntryRetry: Equatable {
     var retry: Bool
     var dropReferences: Bool
     var dropNames: Bool
+    var dropPhoto: Bool = false
 }
 
-/// A rejected upload has to be sent again. A conflict means the server already has the record. A dangling person or category is dropped once so the spend itself still uploads. A schema rejection is sent again without the name fields.
+/// A rejected upload has to be sent again. A conflict means the server already has the record. A dangling person or category is dropped once so the spend itself still uploads. A schema rejection is sent again without the name fields. A photo CloudKit cannot read is dropped so the spend still arrives.
 func entryRetry(problem: EntrySaveProblem, attempt: Int, alreadyDroppedReferences: Bool) -> EntryRetry {
     switch problem {
     case .conflict:
         return EntryRetry(retry: false, dropReferences: false, dropNames: false)
     case .missingReference:
-        return EntryRetry(retry: attempt < 2 && !alreadyDroppedReferences, dropReferences: true, dropNames: false)
+        return EntryRetry(retry: attempt < 2, dropReferences: true, dropNames: false, dropPhoto: alreadyDroppedReferences)
     case .schema:
         return EntryRetry(retry: attempt < 2, dropReferences: alreadyDroppedReferences, dropNames: true)
-    case .batch, .other:
+    case .asset:
+        return EntryRetry(retry: attempt < 2, dropReferences: alreadyDroppedReferences, dropNames: false, dropPhoto: true)
+    case .batch:
         return EntryRetry(retry: attempt < 2, dropReferences: alreadyDroppedReferences, dropNames: false)
+    case .other:
+        return EntryRetry(retry: attempt < 2, dropReferences: true, dropNames: true, dropPhoto: true)
     }
 }
 

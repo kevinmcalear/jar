@@ -3,11 +3,14 @@ import SwiftUI
 struct YearView: View {
     @Environment(AppModel.self) private var model
     @State private var draft: MoneyDraft?
+    @State private var year = 0
 
     var body: some View {
         let report = YearReport.make(model)
+        let shown = year == 0 ? yearNumber(model.openDate) : year
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                monthTotals(shown)
                 if report.ready {
                     Text(formatCents(report.left, nearestDollar: true))
                         .font(Flare.number(64))
@@ -52,14 +55,73 @@ struct YearView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Flare.ground.ignoresSafeArea())
-        .navigationTitle(String(yearNumber(model.openDate)))
-        .navigationSubtitle("End of the year")
+        .navigationTitle(String(shownYear))
+        .navigationSubtitle(yearSpentLine)
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { shiftYear(-1) } label: { Image(systemName: "chevron.left") }
+                    .accessibilityLabel("Previous year")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { shiftYear(1) } label: { Image(systemName: "chevron.right") }
+                    .accessibilityLabel("Next year")
+            }
+        }
         .sheet(item: $draft) { draft in
             MoneyEditor(draft: draft) { name, amount, rhythm in
                 model.addMoney(income: draft.income, name: name, amount: amount, rhythm: rhythm)
             }
         }
+    }
+
+    private var shownYear: Int { year == 0 ? yearNumber(model.openDate) : year }
+
+    private var yearSpentLine: String {
+        let prefix = String(format: "%04d-", shownYear)
+        let total = model.snapshot.entries.reduce(0) { sum, entry in
+            entry.kind == "jar" && entry.day.hasPrefix(prefix) ? sum + entry.amount : sum
+        }
+        return "\(formatCents(total)) spent"
+    }
+
+    private func shiftYear(_ delta: Int) {
+        year = shownYear + delta
+    }
+
+    private func monthTotals(_ year: Int) -> some View {
+        let days = model.snapshot.entries.map(\.day) + model.snapshot.days.map(\.date)
+        let months = monthsWithDays(days, year: year)
+        return VStack(spacing: 0) {
+            if months.isEmpty {
+                Text("Nothing logged")
+                    .font(.subheadline)
+                    .foregroundStyle(Flare.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+            }
+            ForEach(months, id: \.self) { prefix in
+                let total = model.snapshot.entries.reduce(0) { sum, entry in
+                    entry.kind == "jar" && entry.day.hasPrefix(prefix) ? sum + entry.amount : sum
+                }
+                HStack {
+                    Text(monthTitle(prefix)).foregroundStyle(Flare.paper)
+                    Spacer()
+                    Text("\(formatCents(total)) spent").foregroundStyle(Flare.paper)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+            }
+        }
+        .background(Flare.surface, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func monthTitle(_ prefix: String) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = model.timeZone
+        formatter.dateFormat = "MMMM"
+        return formatter.string(from: date(from: prefix + "-01", timeZone: model.timeZone) ?? Date())
     }
 
     private func line(_ title: String, _ cents: Int) -> some View {

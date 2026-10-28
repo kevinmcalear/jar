@@ -44,8 +44,8 @@ struct RootView: View {
                 Tab("Today", systemImage: "sun.max", value: "today") {
                     NavigationStack { TodayView() }
                 }
-                Tab("Month", systemImage: "calendar", value: "month") {
-                    NavigationStack { MonthView() }
+                Tab("Week", systemImage: "calendar", value: "week") {
+                    NavigationStack { WeekView() }
                 }
                 Tab("Year", systemImage: "clock", value: "year") {
                     NavigationStack { YearView() }
@@ -123,8 +123,8 @@ struct ShoveView: View {
     @State private var token = 0
 
     var body: some View {
-        let start = min(1, Double(shove.plan.beforeJar) / 30000)
-        let end = min(1, Double(shove.plan.afterJar) / 30000)
+        let start = jarFill(cents: shove.plan.beforeJar)
+        let end = jarFill(cents: shove.plan.afterJar)
         VStack(spacing: 22) {
             KeyframeAnimator(initialValue: Motion(fill: start), trigger: token) { value in
                 VStack(spacing: 18) {

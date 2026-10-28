@@ -39,6 +39,7 @@ final class AppModel {
     @ObservationIgnored var saveAttempts: [String: Int] = [:]
     @ObservationIgnored var systemFields: [String: Data] = [:]
     @ObservationIgnored var omitEntryNames = false
+    @ObservationIgnored var omitEntryPhoto = false
     var key: SymmetricKey?
     var waiting: [CKRecord] = []
     let sync = HouseholdSync()
@@ -458,6 +459,7 @@ final class AppModel {
         try? store.insertEntry(entry)
         reload()
         sync.enqueueSave(entry.id)
+        sync.sendSoon()
         morningNote = nil
         catchUp()
     }
@@ -470,6 +472,7 @@ final class AppModel {
         try? store.insertEntry(entry)
         reload()
         sync.enqueueSave(entry.id)
+        sync.sendSoon()
     }
 
     func deleteEntry(_ id: String) {
@@ -482,6 +485,7 @@ final class AppModel {
         try? store.deleteEntry(id)
         reload()
         sync.enqueueDelete(id)
+        sync.sendSoon()
         if entry.kind == "jar" { catchUp() }
     }
 
@@ -497,6 +501,7 @@ final class AppModel {
         try? store.insertEntry(entry)
         reload()
         sync.enqueueSave(id)
+        sync.sendSoon()
         if entry.kind == "jar" { catchUp() }
     }
 
