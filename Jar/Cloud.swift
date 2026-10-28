@@ -65,6 +65,7 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
     private var privateEngine: CKSyncEngine?
     private var sharedEngine: CKSyncEngine?
     private var queued: [CKSyncEngine.PendingRecordZoneChange] = []
+    private var extraSends = 0
 
     func start() {
         let fresh = privateEngine == nil && sharedEngine == nil
@@ -102,13 +103,24 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
     }
 
     func fetch() async {
-        if privateEngine == nil { start() }
-        await adoptSharedHousehold()
-        try? await privateEngine?.fetchChanges()
-        try? await sharedEngine?.fetchChanges()
-        if UserDefaults.standard.bool(forKey: "jar.resync") {
+        // One open downloads the whole zone. A cursor that already says "caught up" was skipping a spend that never arrived.
+        let refetch = UserDefaults.standard.string(forKey: "jar.zoneRefetch") != "17" || UserDefaults.standard.bool(forKey: "jar.resync")
+        if refetch {
             UserDefaults.standard.set(false, forKey: "jar.resync")
             resetSync()
+        }
+        if privateEngine == nil { start() }
+        await adoptSharedHousehold()
+        var fetched = false
+        do {
+            try await privateEngine?.fetchChanges()
+            fetched = true
+        } catch {
+            fetched = false
+        }
+        try? await sharedEngine?.fetchChanges()
+        if refetch, fetched {
+            UserDefaults.standard.set("17", forKey: "jar.zoneRefetch")
         }
         model?.collapseHouseholdCopies()
         model?.healLostFaces()
@@ -302,14 +314,19 @@ final class HouseholdSync: NSObject, CKSyncEngineDelegate {
                 UserDefaults.standard.set(false, forKey: "jar.republishArmed")
             }
         case .didSendChanges:
-            guard UserDefaults.standard.bool(forKey: "jar.republishArmed") else { break }
-            let idle = [privateEngine, sharedEngine].allSatisfy { engine in
-                engine?.state.pendingRecordZoneChanges.isEmpty != false && engine?.state.pendingDatabaseChanges.isEmpty != false
+            if UserDefaults.standard.bool(forKey: "jar.republishArmed") {
+                let idle = [privateEngine, sharedEngine].allSatisfy { engine in
+                    engine?.state.pendingRecordZoneChanges.isEmpty != false && engine?.state.pendingDatabaseChanges.isEmpty != false
+                }
+                if idle {
+                    UserDefaults.standard.set(false, forKey: "jar.republish")
+                    UserDefaults.standard.set(false, forKey: "jar.republishArmed")
+                }
             }
-            if idle {
-                UserDefaults.standard.set(false, forKey: "jar.republish")
-                UserDefaults.standard.set(false, forKey: "jar.republishArmed")
-            }
+            // A rejected save is queued again inside this send. Send it now, a few times, so it does not wait for the next launch.
+            guard extraSends < 3, writer?.state.pendingRecordZoneChanges.isEmpty == false else { break }
+            extraSends += 1
+            Task { try? await self.writer?.sendChanges() }
         default:
             break
         }

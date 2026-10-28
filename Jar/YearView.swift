@@ -92,28 +92,53 @@ struct YearView: View {
     private func monthTotals(_ year: Int) -> some View {
         let days = model.snapshot.entries.map(\.day) + model.snapshot.days.map(\.date)
         let months = monthsWithDays(days, year: year)
-        return VStack(spacing: 0) {
+        let jar = model.snapshot.entries.filter { $0.kind == "jar" }.map { (day: $0.day, amount: $0.amount) }
+        return VStack(spacing: 12) {
             if months.isEmpty {
                 Text("Nothing logged")
                     .font(.subheadline)
                     .foregroundStyle(Flare.muted)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(14)
+                    .background(Flare.surface, in: RoundedRectangle(cornerRadius: 16))
             }
             ForEach(months, id: \.self) { prefix in
-                let total = model.snapshot.entries.reduce(0) { sum, entry in
-                    entry.kind == "jar" && entry.day.hasPrefix(prefix) ? sum + entry.amount : sum
+                let parts = prefix.split(separator: "-")
+                let month = Int(parts.last ?? "") ?? 1
+                let report = monthWeeks(entries: jar, year: year, month: month, timeZone: model.timeZone)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(monthTitle(prefix))
+                        .font(.headline)
+                        .foregroundStyle(Flare.paper)
+                        .padding(.horizontal, 14)
+                        .padding(.top, 14)
+                        .padding(.bottom, 4)
+                    ForEach(report.weeks) { week in
+                        HStack {
+                            Text(weekRangeTitle(start: week.start, end: week.end, timeZone: model.timeZone))
+                                .foregroundStyle(Flare.muted)
+                            Spacer()
+                            Text(formatCents(week.spent))
+                                .foregroundStyle(Flare.paper)
+                        }
+                        .font(.subheadline)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                    }
+                    HStack {
+                        Text("\(monthTitle(prefix)) total").foregroundStyle(Flare.paper)
+                        Spacer()
+                        Text(formatCents(report.total)).foregroundStyle(Flare.paper)
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 14)
+                    .padding(.top, 6)
+                    .padding(.bottom, 14)
                 }
-                HStack {
-                    Text(monthTitle(prefix)).foregroundStyle(Flare.paper)
-                    Spacer()
-                    Text("\(formatCents(total)) spent").foregroundStyle(Flare.paper)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Flare.surface, in: RoundedRectangle(cornerRadius: 16))
             }
         }
-        .background(Flare.surface, in: RoundedRectangle(cornerRadius: 16))
     }
 
     private func monthTitle(_ prefix: String) -> String {

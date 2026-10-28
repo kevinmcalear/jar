@@ -180,7 +180,9 @@ struct TodayView: View {
             case .hole:
                 ScoreJar(fill: 0, stroke: Flare.paper, gaps: 1, width: 72)
             default:
-                ScoreJar(fill: jarFill(cents: settled.jar), stroke: Flare.paper, gaps: settled.jar == 0 ? 1 : 0, width: 72)
+                let capacity = jarCapacity(cents: settled.jar)
+                ScoreJar(fill: jarFill(cents: settled.jar), stroke: Flare.paper, gaps: settled.jar == 0 ? 1 : 0, width: 72 * jarScale(cents: settled.jar))
+                    .animation(.spring(duration: 0.7), value: capacity)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(formatCents(settled.jar))
@@ -191,6 +193,13 @@ struct TodayView: View {
                 Text("in the jar")
                     .font(.subheadline)
                     .foregroundStyle(Flare.muted)
+                if case .hole = picture {
+                    EmptyView()
+                } else {
+                    Text("full at \(formatCents(jarCapacity(cents: settled.jar)))")
+                        .font(.subheadline)
+                        .foregroundStyle(Flare.muted)
+                }
             }
         }
     }

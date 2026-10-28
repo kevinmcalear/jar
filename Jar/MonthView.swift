@@ -4,6 +4,7 @@ struct WeekView: View {
     @Environment(AppModel.self) private var model
     @State private var anchor = ""
     @State private var openDate: String?
+    @State private var primed = false
 
     var body: some View {
         let week = weekInterval(containing: focus, timeZone: model.timeZone)
@@ -18,6 +19,11 @@ struct WeekView: View {
         .navigationTitle(rangeTitle(week))
         .navigationSubtitle(spentLine(week))
         .navigationBarTitleDisplayMode(.large)
+        .onAppear {
+            guard !primed else { return }
+            primed = true
+            openDate = model.openDate
+        }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button { shift(-1) } label: { Image(systemName: "chevron.left") }
@@ -43,7 +49,9 @@ struct WeekView: View {
     private func shift(_ delta: Int) {
         let start = weekInterval(containing: focus, timeZone: model.timeZone).start
         anchor = addDays(start, delta * 7, timeZone: model.timeZone)
-        openDate = nil
+        let week = weekInterval(containing: anchor, timeZone: model.timeZone)
+        let days = daysFrom(week.start, until: addDays(week.end, 1, timeZone: model.timeZone), timeZone: model.timeZone)
+        openDate = days.contains(model.openDate) ? model.openDate : nil
     }
 
     private func weekCard(_ week: (start: String, end: String)) -> some View {
@@ -243,19 +251,6 @@ struct WeekView: View {
     }
 
     private func rangeTitle(_ week: (start: String, end: String)) -> String {
-        let start = date(from: week.start, timeZone: model.timeZone) ?? Date()
-        let end = date(from: week.end, timeZone: model.timeZone) ?? Date()
-        let month = DateFormatter()
-        month.locale = Locale(identifier: "en_US_POSIX")
-        month.timeZone = model.timeZone
-        month.dateFormat = "MMM"
-        let day = DateFormatter()
-        day.locale = Locale(identifier: "en_US_POSIX")
-        day.timeZone = model.timeZone
-        day.dateFormat = "d"
-        if month.string(from: start) == month.string(from: end) {
-            return "\(month.string(from: start)) \(day.string(from: start)) – \(day.string(from: end))"
-        }
-        return "\(month.string(from: start)) \(day.string(from: start)) – \(month.string(from: end)) \(day.string(from: end))"
+        weekRangeTitle(start: week.start, end: week.end, timeZone: model.timeZone)
     }
 }

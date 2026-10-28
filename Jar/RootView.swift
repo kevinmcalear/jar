@@ -125,10 +125,15 @@ struct ShoveView: View {
     var body: some View {
         let start = jarFill(cents: shove.plan.beforeJar)
         let end = jarFill(cents: shove.plan.afterJar)
+        let startScale = jarScale(cents: shove.plan.beforeJar)
+        let endScale = jarScale(cents: shove.plan.afterJar)
         VStack(spacing: 22) {
-            KeyframeAnimator(initialValue: Motion(fill: start), trigger: token) { value in
+            KeyframeAnimator(initialValue: Motion(fill: start, scale: startScale), trigger: token) { value in
                 VStack(spacing: 18) {
-                    ScoreJar(fill: value.fill, stroke: Flare.paper, gaps: value.fill == 0 ? 1 : 0, width: 180)
+                    ScoreJar(fill: value.fill, stroke: Flare.paper, gaps: value.fill == 0 ? 1 : 0, width: 180 * value.scale)
+                    Text("full at \(formatCents(jarCapacity(cents: value.scale >= (startScale + endScale) / 2 ? shove.plan.afterJar : shove.plan.beforeJar)))")
+                        .font(.subheadline)
+                        .foregroundStyle(Flare.muted)
                     if shove.plan.billCents > 0 {
                         BillPile(cents: shove.plan.billCents)
                             .offset(y: value.drop)
@@ -143,6 +148,10 @@ struct ShoveView: View {
                 KeyframeTrack(\.fill) {
                     LinearKeyframe(start, duration: 0.35)
                     SpringKeyframe(end, duration: 0.8, spring: .smooth)
+                }
+                KeyframeTrack(\.scale) {
+                    LinearKeyframe(startScale, duration: 0.35)
+                    SpringKeyframe(endScale, duration: 0.8, spring: .smooth)
                 }
                 KeyframeTrack(\.alpha) {
                     LinearKeyframe(1, duration: 0.45)
@@ -181,12 +190,14 @@ nonisolated struct Motion: Animatable {
     var drop: CGFloat = 0
     var fill: Double
     var alpha: Double = 1
-    var animatableData: AnimatablePair<CGFloat, AnimatablePair<Double, Double>> {
-        get { AnimatablePair(drop, AnimatablePair(fill, alpha)) }
+    var scale: Double = 1
+    var animatableData: AnimatablePair<AnimatablePair<CGFloat, Double>, AnimatablePair<Double, Double>> {
+        get { AnimatablePair(AnimatablePair(drop, fill), AnimatablePair(alpha, scale)) }
         set {
-            drop = newValue.first
-            fill = newValue.second.first
-            alpha = newValue.second.second
+            drop = newValue.first.first
+            fill = newValue.first.second
+            alpha = newValue.second.first
+            scale = newValue.second.second
         }
     }
 }

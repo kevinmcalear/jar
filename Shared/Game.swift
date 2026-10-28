@@ -39,12 +39,33 @@ func project(jar: Int, debt: Int, cap: Int, spent: Int) -> (jar: Int, debt: Int)
     settle(jar: jar, debt: debt, cap: cap, spent: spent)
 }
 
-/// The glass fills toward the next $50. $46.77 is nearly full. $50 is full, and the next dollar starts the glass toward $100.
-func jarFill(cents: Int, step: Int = 5000) -> Double {
-    guard cents > 0, step > 0 else { return 0 }
-    let into = cents % step
-    if into == 0 { return 1 }
-    return Double(into) / Double(step)
+/// The glass doubles when it fills: $50, then $100, then $200. Exactly $50 is still the first glass, full. The next dollar is a bigger glass filling toward $100.
+func jarCapacity(cents: Int) -> Int {
+    if cents <= 0 { return 5000 }
+    var capacity = 5000
+    while capacity < cents {
+        let next = capacity * 2
+        if next <= capacity { return capacity }
+        capacity = next
+    }
+    return capacity
+}
+
+func jarFill(cents: Int) -> Double {
+    guard cents > 0 else { return 0 }
+    return min(1, Double(cents) / Double(jarCapacity(cents: cents)))
+}
+
+/// The drawing grows for the first two doublings, then stops so the amount beside it still fits.
+func jarScale(cents: Int) -> Double {
+    var steps = 0
+    var size = 5000
+    let capacity = jarCapacity(cents: cents)
+    while size < capacity, steps < 2 {
+        size *= 2
+        steps += 1
+    }
+    return [1, 1.65, 1.85][steps]
 }
 
 func replay(_ days: [(cap: Int, spent: Int)]) -> (jar: Int, debt: Int) {
@@ -285,6 +306,43 @@ func weekInterval(containing day: String, timeZone: TimeZone) -> (start: String,
     let start = calendar.date(byAdding: .day, value: -fromMonday, to: date) ?? date
     let end = calendar.date(byAdding: .day, value: 6, to: start) ?? start
     return (formatDay(start, timeZone: timeZone), formatDay(end, timeZone: timeZone))
+}
+
+func weekRangeTitle(start: String, end: String, timeZone: TimeZone) -> String {
+    let startDate = date(from: start, timeZone: timeZone) ?? Date()
+    let endDate = date(from: end, timeZone: timeZone) ?? Date()
+    let month = DateFormatter()
+    month.locale = Locale(identifier: "en_US_POSIX")
+    month.timeZone = timeZone
+    month.dateFormat = "MMM"
+    let day = DateFormatter()
+    day.locale = Locale(identifier: "en_US_POSIX")
+    day.timeZone = timeZone
+    day.dateFormat = "d"
+    if month.string(from: startDate) == month.string(from: endDate) {
+        return "\(month.string(from: startDate)) \(day.string(from: startDate)) – \(day.string(from: endDate))"
+    }
+    return "\(month.string(from: startDate)) \(day.string(from: startDate)) – \(month.string(from: endDate)) \(day.string(from: endDate))"
+}
+
+struct MonthWeekSpend: Equatable, Identifiable {
+    var start: String
+    var end: String
+    var spent: Int
+    var id: String { start }
+}
+
+/// Every week that touches the month, then the month total. A week that starts in the previous month only counts days inside this month, so the weeks add up.
+func monthWeeks(entries: [(day: String, amount: Int)], year: Int, month: Int, timeZone: TimeZone) -> (weeks: [MonthWeekSpend], total: Int) {
+    let prefix = String(format: "%04d-%02d-", year, month)
+    let weeks = weeksTouching(year: year, month: month, timeZone: timeZone).map { week in
+        let spent = entries.reduce(0) { sum, entry in
+            entry.day >= week.start && entry.day <= week.end && entry.day.hasPrefix(prefix) ? sum + entry.amount : sum
+        }
+        return MonthWeekSpend(start: week.start, end: week.end, spent: spent)
+    }
+    let total = entries.reduce(0) { $1.day.hasPrefix(prefix) ? $0 + $1.amount : $0 }
+    return (weeks, total)
 }
 
 func weeksTouching(year: Int, month: Int, timeZone: TimeZone) -> [(start: String, end: String)] {
