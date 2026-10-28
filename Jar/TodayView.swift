@@ -180,9 +180,7 @@ struct TodayView: View {
             case .hole:
                 ScoreJar(fill: 0, stroke: Flare.paper, gaps: 1, width: 72)
             default:
-                let capacity = jarCapacity(cents: settled.jar)
-                ScoreJar(fill: jarFill(cents: settled.jar), stroke: Flare.paper, gaps: settled.jar == 0 ? 1 : 0, width: 72 * jarScale(cents: settled.jar))
-                    .animation(.spring(duration: 0.7), value: capacity)
+                ScoreJar(fill: jarFill(cents: settled.jar), stroke: Flare.paper, gaps: settled.jar == 0 ? 1 : 0, width: 72)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(formatCents(settled.jar))

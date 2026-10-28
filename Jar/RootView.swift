@@ -72,14 +72,20 @@ struct RootView: View {
                     .padding(.trailing, 20)
                     .padding(.bottom, 16)
             }
+            if let face = model.face {
+                FacePlayView(play: face) { model.face = nil }
+            }
             if let shove = model.shove {
                 ShoveView(shove: shove)
             }
         }
-        .sheet(item: $model.addToken, onDismiss: { model.addDay = nil }) { _ in AddSheet() }
+        .sheet(item: $model.addToken, onDismiss: {
+            model.addDay = nil
+            model.startQueuedFace()
+        }) { _ in AddSheet() }
         .sheet(item: $model.outsideToken) { _ in OutsideSheet() }
         .sheet(item: $model.settingsToken) { _ in SettingsSheet() }
-        .sheet(item: $model.yesterdayToken) { _ in YesterdaySheet() }
+        .sheet(item: $model.yesterdayToken, onDismiss: { model.startQueuedFace() }) { _ in YesterdaySheet() }
         .sheet(item: editToken) { _ in EditAmountSheet() }
     }
 
@@ -115,91 +121,6 @@ struct RootView: View {
 
 struct EditID: Identifiable {
     var id: String
-}
-
-struct ShoveView: View {
-    var shove: ShoveShow
-    @Environment(AppModel.self) private var model
-    @State private var token = 0
-
-    var body: some View {
-        let start = jarFill(cents: shove.plan.beforeJar)
-        let end = jarFill(cents: shove.plan.afterJar)
-        let startScale = jarScale(cents: shove.plan.beforeJar)
-        let endScale = jarScale(cents: shove.plan.afterJar)
-        VStack(spacing: 22) {
-            KeyframeAnimator(initialValue: Motion(fill: start, scale: startScale), trigger: token) { value in
-                VStack(spacing: 18) {
-                    ScoreJar(fill: value.fill, stroke: Flare.paper, gaps: value.fill == 0 ? 1 : 0, width: 180 * value.scale)
-                    Text("full at \(formatCents(jarCapacity(cents: value.scale >= (startScale + endScale) / 2 ? shove.plan.afterJar : shove.plan.beforeJar)))")
-                        .font(.subheadline)
-                        .foregroundStyle(Flare.muted)
-                    if shove.plan.billCents > 0 {
-                        BillPile(cents: shove.plan.billCents)
-                            .offset(y: value.drop)
-                            .opacity(value.alpha)
-                    }
-                }
-            } keyframes: { _ in
-                KeyframeTrack(\.drop) {
-                    LinearKeyframe(0, duration: 0.15)
-                    SpringKeyframe(120, duration: 0.75, spring: .smooth)
-                }
-                KeyframeTrack(\.fill) {
-                    LinearKeyframe(start, duration: 0.35)
-                    SpringKeyframe(end, duration: 0.8, spring: .smooth)
-                }
-                KeyframeTrack(\.scale) {
-                    LinearKeyframe(startScale, duration: 0.35)
-                    SpringKeyframe(endScale, duration: 0.8, spring: .smooth)
-                }
-                KeyframeTrack(\.alpha) {
-                    LinearKeyframe(1, duration: 0.45)
-                    LinearKeyframe(shove.plan.billCents > 0 ? 0 : 1, duration: 0.4)
-                }
-            }
-            if shove.plan.tappable {
-                Button(shove.plan.text) { model.yesterdayToken = SheetToken() }
-                    .font(Flare.number(22))
-                    .foregroundStyle(Flare.flare)
-                    .multilineTextAlignment(.center)
-                Button("Continue") { model.finishShove() }
-                    .foregroundStyle(Flare.paper)
-            } else {
-                Text(shove.plan.text)
-                    .font(Flare.number(22))
-                    .foregroundStyle(Flare.flare)
-                    .multilineTextAlignment(.center)
-            }
-        }
-        .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Flare.ground.ignoresSafeArea())
-        .onAppear {
-            token += 1
-            guard !shove.plan.tappable else { return }
-            Task {
-                try? await Task.sleep(for: .seconds(1.8))
-                if model.shove?.id == shove.id { model.finishShove() }
-            }
-        }
-    }
-}
-
-nonisolated struct Motion: Animatable {
-    var drop: CGFloat = 0
-    var fill: Double
-    var alpha: Double = 1
-    var scale: Double = 1
-    var animatableData: AnimatablePair<AnimatablePair<CGFloat, Double>, AnimatablePair<Double, Double>> {
-        get { AnimatablePair(AnimatablePair(drop, fill), AnimatablePair(alpha, scale)) }
-        set {
-            drop = newValue.first.first
-            fill = newValue.first.second
-            alpha = newValue.second.first
-            scale = newValue.second.second
-        }
-    }
 }
 
 struct SetupView: View {

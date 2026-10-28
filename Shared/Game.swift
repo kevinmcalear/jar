@@ -56,16 +56,96 @@ func jarFill(cents: Int) -> Double {
     return min(1, Double(cents) / Double(jarCapacity(cents: cents)))
 }
 
-/// The drawing grows for the first two doublings, then stops so the amount beside it still fits.
-func jarScale(cents: Int) -> Double {
-    var steps = 0
-    var size = 5000
-    let capacity = jarCapacity(cents: cents)
-    while size < capacity, steps < 2 {
-        size *= 2
-        steps += 1
+/// Full jars the balance passes on the way up. Landing on $50 is still that jar. The next cent is the $100 jar.
+func jarCrossings(from before: Int, to after: Int) -> [Int] {
+    guard after > before else { return [] }
+    var step = 5000
+    var crossed: [Int] = []
+    while step < after, crossed.count < 6 {
+        if step > before { crossed.append(step) }
+        let next = step * 2
+        if next <= step { break }
+        step = next
     }
-    return [1, 1.65, 1.85][steps]
+    return crossed
+}
+
+/// What a spend takes off today's pile, and what it has to pull out of the jar once the pile is gone.
+func spentSplit(amount: Int, beforeSpent: Int, cap: Int) -> (pile: Int, jar: Int) {
+    let room = max(0, cap - max(0, beforeSpent))
+    let fromPile = min(max(0, amount), room)
+    return (fromPile, max(0, amount) - fromPile)
+}
+
+func unitRamp(_ t: Double, _ start: Double, _ end: Double) -> Double {
+    guard end > start else { return t >= end ? 1 : 0 }
+    let x = min(1, max(0, (t - start) / (end - start)))
+    return x * x * (3 - 2 * x)
+}
+
+struct FacePose: Equatable {
+    var headScale: Double
+    var wiggle: Double
+    var headY: Double
+    var headAlpha: Double
+    var fly: Double
+    var billAlpha: Double
+}
+
+/// Head pops in at the top, swells and wiggles, bills fly into the face, then the head leaves off the top.
+func facePose(at t: Double) -> FacePose {
+    let time = min(1, max(0, t))
+    let appear = unitRamp(time, 0, 0.14)
+    let swell = unitRamp(time, 0.12, 0.32)
+    let leave = unitRamp(time, 0.72, 1)
+    let wiggling = time > 0.16 && time < 0.58
+    let wiggle = wiggling ? sin((time - 0.16) / 0.42 * .pi * 4) * 14 : 0
+    let headScale = 0.35 + 0.65 * appear + 0.4 * swell + 0.15 * leave
+    let fly = unitRamp(time, 0.34, 0.68)
+    let billAlpha = time < 0.66 ? 1 : max(0, 1 - (time - 0.66) / 0.12)
+    return FacePose(headScale: headScale, wiggle: wiggle, headY: -640 * leave, headAlpha: appear, fly: fly, billAlpha: billAlpha)
+}
+
+struct ShovePose: Equatable {
+    var billY: Double
+    var billAlpha: Double
+    var fill: Double
+    var scale: Double
+    var goal: Int
+}
+
+/// Leftover bills rise, then drop into the mouth. Crossing a full jar swells the glass and lets it settle back at the next goal.
+func shovePose(at t: Double, beforeJar: Int, afterJar: Int) -> ShovePose {
+    let time = min(1, max(0, t))
+    let crossings = jarCrossings(from: beforeJar, to: afterJar)
+    let startFill = jarFill(cents: beforeJar)
+    let endFill = jarFill(cents: afterJar)
+    let rise = unitRamp(time, 0.04, 0.38)
+    let drop = unitRamp(time, 0.38, 0.62)
+    let billY = 110 + (-310) * rise + 220 * drop
+    let billAlpha = time < 0.55 ? 1 : max(0, 1 - (time - 0.55) / 0.18)
+    var fill = startFill
+    var scale = 1.0
+    var goal = jarCapacity(cents: beforeJar)
+    if crossings.isEmpty {
+        fill = startFill + (endFill - startFill) * unitRamp(time, 0.4, 0.78)
+    } else {
+        let toFull = unitRamp(time, 0.28, 0.52)
+        let reset = unitRamp(time, 0.52, 0.66)
+        let settle = unitRamp(time, 0.66, 0.92)
+        if time < 0.52 {
+            fill = startFill + (1 - startFill) * toFull
+        } else if time < 0.66 {
+            fill = 1 - reset
+        } else {
+            fill = endFill * settle
+        }
+        let swellUp = unitRamp(time, 0.46, 0.6)
+        let swellDown = unitRamp(time, 0.68, 0.92)
+        scale = 1 + 0.45 * swellUp * (1 - swellDown)
+        if time >= 0.6 { goal = jarCapacity(cents: afterJar) }
+    }
+    return ShovePose(billY: billY, billAlpha: billAlpha, fill: fill, scale: scale, goal: goal)
 }
 
 func replay(_ days: [(cap: Int, spent: Int)]) -> (jar: Int, debt: Int) {

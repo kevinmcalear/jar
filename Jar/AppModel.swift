@@ -10,6 +10,14 @@ struct ShoveShow: Identifiable, Equatable {
     var dates: [String]
 }
 
+struct FacePlay: Identifiable, Equatable {
+    var id = UUID().uuidString
+    var sticker: String
+    var name: String
+    var pileCents: Int
+    var jarCents: Int
+}
+
 struct SheetToken: Identifiable {
     let id = UUID()
 }
@@ -26,6 +34,8 @@ final class AppModel {
     var acceptingShare = false
     var morningNote: String?
     var shove: ShoveShow?
+    var face: FacePlay?
+    @ObservationIgnored var queuedFace: FacePlay?
     var addToken: SheetToken?
     var addDay: String?
     var pendingAdd = false
@@ -442,12 +452,25 @@ final class AppModel {
         try? store.markPourSeen(shove.dates)
         self.shove = nil
         reload()
+        startQueuedFace()
+    }
+
+    func startQueuedFace() {
+        guard shove == nil, let queued = queuedFace else { return }
+        queuedFace = nil
+        face = queued
     }
 
     func logJar(amount: Int, categoryID: String, photo: Data?, note: String? = nil, day: String? = nil) {
         guard let store, amount > 0, let holder = snapshot.settings?.holderID else { return }
         let target = day ?? openDate
         guard canEditJarDay(target, open: openDate) else { return }
+        let beforeSpent = jarSpent(target)
+        let cap = snapshot.days.first { $0.date == target }?.cap ?? snapshot.settings?.usualCap ?? 5000
+        if let person = snapshot.people.first(where: { $0.id == holder }), person.sticker == "kevin" || person.sticker == "bridget" {
+            let split = spentSplit(amount: amount, beforeSpent: beforeSpent, cap: cap)
+            queuedFace = FacePlay(sticker: person.sticker, name: person.displayName, pileCents: split.pile, jarCents: split.jar)
+        }
         if target != openDate {
             shove = nil
             try? store.unsetSettled(from: target)
