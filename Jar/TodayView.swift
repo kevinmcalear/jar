@@ -182,9 +182,9 @@ struct TodayView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
                 } else {
-                    Text(jarOfLine(cents: settled.jar))
+                    (Text(formatCents(settled.jar)).foregroundStyle(ink)
+                        + Text(" of \(formatCents(jarCapacity(cents: settled.jar)))").foregroundStyle(Flare.muted))
                         .font(Flare.number(28))
-                        .foregroundStyle(ink)
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
                     Text(nextJarLine(cents: settled.jar))
