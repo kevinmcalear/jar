@@ -106,10 +106,11 @@ func facePose(at t: Double) -> FacePose {
     return FacePose(headScale: headScale, wiggle: wiggle, headY: -640 * leave, headAlpha: appear, fly: fly, billAlpha: billAlpha)
 }
 
-func nextJarUpgrade(cents: Int) -> Int {
-    let current = jarCapacity(cents: cents)
-    let next = current * 2
-    return next > current ? next : current
+/// Cents still needed to fill this jar. A jar that is already full upgrades on the next cent.
+func jarUpgradeGap(cents: Int) -> Int {
+    let capacity = jarCapacity(cents: max(0, cents))
+    let gap = capacity - max(0, cents)
+    return gap > 0 ? gap : 1
 }
 
 func jarSizeLine(cents: Int) -> String {
@@ -117,7 +118,7 @@ func jarSizeLine(cents: Int) -> String {
 }
 
 func nextJarLine(cents: Int) -> String {
-    "next jar upgrade at \(formatCents(nextJarUpgrade(cents: cents)))"
+    "\(formatCents(jarUpgradeGap(cents: cents))) to the next jar upgrade"
 }
 
 struct ShovePose: Equatable {
@@ -160,7 +161,7 @@ func shovePose(at t: Double, beforeJar: Int, afterJar: Int) -> ShovePose {
         scale = 1 + 0.45 * swellUp * (1 - swellDown)
         if time >= 0.6 { goal = jarCapacity(cents: afterJar) }
     }
-    let passed = !crossings.isEmpty && scale > 1 && goal != jarCapacity(cents: beforeJar)
+    let passed = !crossings.isEmpty && scale > 1
     return ShovePose(billY: billY, billAlpha: billAlpha, fill: fill, scale: scale, goal: goal, upgraded: passed)
 }
 

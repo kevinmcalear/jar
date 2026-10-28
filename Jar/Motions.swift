@@ -128,7 +128,7 @@ struct ShoveView: View {
                     .font(Flare.number(28))
                     .foregroundStyle(Flare.flare)
             } else {
-                Text(nextJarLine(cents: pose.goal))
+                Text(nextJarLine(cents: Int((pose.fill * Double(pose.goal)).rounded())))
                     .font(.subheadline)
                     .foregroundStyle(Flare.muted)
             }
